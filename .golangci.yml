@@ -1,0 +1,30 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - unparam
+
+linters-settings:
+  errcheck:
+    check-blank: true
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/skald-org/skald-go
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
