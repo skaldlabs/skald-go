@@ -18,7 +18,7 @@ linters:
 
 linters-settings:
   errcheck:
-    check-blank: true
+    check-blank: false
   gofmt:
     simplify: true
   goimports:

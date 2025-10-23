@@ -106,7 +106,11 @@ func TestCreateMemo(t *testing.T) {
 func TestCreateMemoInitializesMetadata(t *testing.T) {
 	var capturedBody []byte
 	client := newMockClient(func(req *http.Request) (*http.Response, error) {
-		capturedBody, _ = io.ReadAll(req.Body)
+		var err error
+		capturedBody, err = io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		return mockResponse(200, `{"ok": true}`), nil
 	})
 
@@ -337,7 +341,11 @@ func TestSearch(t *testing.T) {
 func TestSearchWithFilters(t *testing.T) {
 	var capturedBody []byte
 	client := newMockClient(func(req *http.Request) (*http.Response, error) {
-		capturedBody, _ = io.ReadAll(req.Body)
+		var err error
+		capturedBody, err = io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		return mockResponse(200, `{"results": []}`), nil
 	})
 
@@ -376,7 +384,10 @@ func TestChat(t *testing.T) {
 		}
 
 		// Verify stream is false
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		if !strings.Contains(string(body), `"stream":false`) {
 			t.Error("expected stream to be false")
 		}
@@ -415,7 +426,10 @@ data: {"type":"done"}
 		}
 
 		// Verify stream is true
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		if !strings.Contains(string(body), `"stream":true`) {
 			t.Error("expected stream to be true")
 		}
@@ -529,7 +543,10 @@ func TestGenerateDoc(t *testing.T) {
 		}
 
 		// Verify stream is false
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		if !strings.Contains(string(body), `"stream":false`) {
 			t.Error("expected stream to be false")
 		}
@@ -569,7 +586,10 @@ data: {"type":"done"}
 		}
 
 		// Verify stream is true
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		if !strings.Contains(string(body), `"stream":true`) {
 			t.Error("expected stream to be true")
 		}
@@ -635,7 +655,10 @@ func TestURLEncoding(t *testing.T) {
 
 func TestMemoWithAllFields(t *testing.T) {
 	client := newMockClient(func(req *http.Request) (*http.Response, error) {
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
 		bodyStr := string(body)
 
 		// Verify all fields are present

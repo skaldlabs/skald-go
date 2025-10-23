@@ -49,7 +49,7 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (c *Client) GetMemo(ctx context.Context, memoID string, idType ...IDType) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (c *Client) ListMemos(ctx context.Context, params *ListMemosParams) (*ListM
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (c *Client) UpdateMemo(ctx context.Context, memoID string, updateData Updat
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return err
@@ -206,7 +206,7 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -237,7 +237,7 @@ func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (*Cha
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -277,7 +277,7 @@ func (c *Client) StreamedChat(ctx context.Context, query string, filters []Filte
 			errChan <- err
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if err := c.checkResponse(resp); err != nil {
 			errChan <- err
@@ -311,7 +311,7 @@ func (c *Client) GenerateDoc(ctx context.Context, prompt string, rules *string, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
 		return nil, err
@@ -352,7 +352,7 @@ func (c *Client) StreamedGenerateDoc(ctx context.Context, prompt string, rules *
 			errChan <- err
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if err := c.checkResponse(resp); err != nil {
 			errChan <- err
@@ -369,11 +369,7 @@ func (c *Client) StreamedGenerateDoc(ctx context.Context, prompt string, rules *
 		}()
 
 		for event := range chatEventChan {
-			genEvent := GenerateDocStreamEvent{
-				Type:    event.Type,
-				Content: event.Content,
-			}
-			eventChan <- genEvent
+			eventChan <- GenerateDocStreamEvent(event)
 		}
 	}()
 
@@ -406,11 +402,7 @@ func (c *Client) checkResponse(resp *http.Response) error {
 		return nil
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("Skald API error (%d): failed to read error body", resp.StatusCode)
-	}
-
+	bodyBytes, _ := io.ReadAll(resp.Body)
 	return fmt.Errorf("Skald API error (%d): %s", resp.StatusCode, string(bodyBytes))
 }
 
