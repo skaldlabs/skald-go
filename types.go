@@ -46,12 +46,8 @@ const (
 type SearchMethod string
 
 const (
-	// SearchMethodChunkVectorSearch uses semantic search on memo chunks
-	SearchMethodChunkVectorSearch SearchMethod = "chunk_vector_search"
-	// SearchMethodTitleContains searches for substring in title (case-insensitive)
-	SearchMethodTitleContains SearchMethod = "title_contains"
-	// SearchMethodTitleStartsWith searches for prefix in title (case-insensitive)
-	SearchMethodTitleStartsWith SearchMethod = "title_startswith"
+	// SearchMethodChunkSemanticSearch uses semantic search on memo chunks
+	SearchMethodChunkSemanticSearch SearchMethod = "chunk_semantic_search"
 )
 
 // MemoData contains the data for creating a new memo
@@ -190,27 +186,6 @@ type ChatResponse struct {
 
 // ChatStreamEvent represents a streaming event from chat
 type ChatStreamEvent struct {
-	Type    string  `json:"type"`
-	Content *string `json:"content,omitempty"`
-}
-
-// GenerateDocRequest contains parameters for document generation
-type GenerateDocRequest struct {
-	Prompt  string   `json:"prompt"`
-	Rules   *string  `json:"rules,omitempty"`
-	Stream  bool     `json:"stream"`
-	Filters []Filter `json:"filters,omitempty"`
-}
-
-// GenerateDocResponse is the response from a non-streaming document generation
-type GenerateDocResponse struct {
-	OK                bool          `json:"ok"`
-	Response          string        `json:"response"`
-	IntermediateSteps []interface{} `json:"intermediate_steps"`
-}
-
-// GenerateDocStreamEvent represents a streaming event from document generation
-type GenerateDocStreamEvent struct {
 	Type    string  `json:"type"`
 	Content *string `json:"content,omitempty"`
 }
