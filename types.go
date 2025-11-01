@@ -1,6 +1,10 @@
 package skald
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // IDType specifies how to identify a memo
 type IDType string
@@ -67,7 +71,7 @@ type MemoData struct {
 
 // CreateMemoResponse is the response from creating a memo
 type CreateMemoResponse struct {
-	OK bool `json:"ok"`
+	MemoUUID uuid.UUID `json:"memo_uuid"`
 }
 
 // UpdateMemoData contains the fields that can be updated on a memo
@@ -82,7 +86,7 @@ type UpdateMemoData struct {
 
 // UpdateMemoResponse is the response from updating a memo
 type UpdateMemoResponse struct {
-	OK bool `json:"ok"`
+	MemoUUID uuid.UUID `json:"memo_uuid"`
 }
 
 // MemoTag represents a tag associated with a memo
