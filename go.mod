@@ -1,4 +1,4 @@
-module github.com/skaldlabs/skald-go
+module github.com/viniciusgabrielfo/skald-go
 
 go 1.23
 
