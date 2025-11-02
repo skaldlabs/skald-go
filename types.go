@@ -42,14 +42,6 @@ const (
 	FilterTypeCustomMetadata FilterType = "custom_metadata"
 )
 
-// SearchMethod defines how to search for memos
-type SearchMethod string
-
-const (
-	// SearchMethodChunkSemanticSearch uses semantic search on memo chunks
-	SearchMethodChunkSemanticSearch SearchMethod = "chunk_semantic_search"
-)
-
 // MemoData contains the data for creating a new memo
 type MemoData struct {
 	Title          string                 `json:"title"`
@@ -151,7 +143,6 @@ type Filter struct {
 // SearchRequest contains parameters for searching memos
 type SearchRequest struct {
 	Query        string       `json:"query"`
-	SearchMethod SearchMethod `json:"search_method"`
 	Limit        *int         `json:"limit,omitempty"`
 	Filters      []Filter     `json:"filters,omitempty"`
 }

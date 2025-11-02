@@ -26,7 +26,6 @@ func main() {
 	limit := 10
 	searchResp, err := client.Search(ctx, skald.SearchRequest{
 		Query:        "golang best practices",
-		SearchMethod: skald.SearchMethodChunkVectorSearch,
 		Limit:        &limit,
 	})
 
@@ -45,7 +44,6 @@ func main() {
 	fmt.Println("=== Title Contains Search ===")
 	titleSearchResp, err := client.Search(ctx, skald.SearchRequest{
 		Query:        "example",
-		SearchMethod: skald.SearchMethodTitleContains,
 		Limit:        &limit,
 	})
 
@@ -63,7 +61,6 @@ func main() {
 	fmt.Println("=== Search with Filters ===")
 	filteredSearchResp, err := client.Search(ctx, skald.SearchRequest{
 		Query:        "programming",
-		SearchMethod: skald.SearchMethodChunkVectorSearch,
 		Limit:        &limit,
 		Filters: []skald.Filter{
 			{
