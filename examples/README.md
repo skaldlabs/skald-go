@@ -8,7 +8,7 @@ Before running these examples, you need to:
 
 1. Install the Skald Go SDK:
    ```bash
-   go get github.com/skald-org/skald-go
+   go get github.com/skaldlabs/skald-go
    ```
 
 2. Set your Skald API key as an environment variable:
