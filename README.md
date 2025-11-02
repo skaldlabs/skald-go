@@ -173,21 +173,19 @@ if err != nil {
 
 ### Search Memos
 
-Search through your memos using various search methods with optional filters:
+Search through your memos using semantic search:
 
 ```go
 // Basic semantic search
 limit := 10
 results, err := client.Search(ctx, skald.SearchRequest{
     Query:        "quarterly goals",
-    SearchMethod: skald.SearchMethodChunkVectorSearch,
     Limit:        &limit,
 })
 
 // Search with filters
 filtered, err := client.Search(ctx, skald.SearchRequest{
     Query:        "python tutorial",
-    SearchMethod: skald.SearchMethodTitleContains,
     Filters: []skald.Filter{
         {
             Field:      "source",
@@ -213,17 +211,9 @@ for _, memo := range filtered.Results {
     fmt.Printf("- %s (distance: %.4f)\n", memo.Title, *memo.Distance)
 }
 ```
-
-#### Search Methods
-
-- **`SearchMethodChunkVectorSearch`** - Semantic search on memo chunks for detailed content search
-- **`SearchMethodTitleContains`** - Case-insensitive substring match on memo titles
-- **`SearchMethodTitleStartsWith`** - Case-insensitive prefix match on memo titles
-
 #### Search Parameters
 
 - `Query` (string, required) - The search query
-- `SearchMethod` (SearchMethod, required) - One of the search methods above
 - `Limit` (*int, optional) - Maximum results to return (1-50, default 10)
 - `Filters` ([]Filter, optional) - Array of filter objects to narrow results (see Filters section below)
 
@@ -247,7 +237,7 @@ type SearchResult struct {
 - `Title` - Memo title
 - `Summary` - Auto-generated summary for the memo
 - `ContentSnippet` - A snippet containing the beginning of the memo
-- `Distance` - A decimal from 0 to 2 determining how close the result was deemed to be to the query when using semantic search (`SearchMethodChunkVectorSearch`). The closer to 0 the more related the content is to the query. `nil` if using `SearchMethodTitleContains` or `SearchMethodTitleStartsWith`.
+- `Distance` - A decimal from 0 to 2 determining how close the result was deemed to be to the query.
 
 ### Chat with Your Knowledge Base
 
@@ -473,7 +463,6 @@ When you provide multiple filters, they are combined with AND logic (all filters
 ```go
 results, err := client.Search(ctx, skald.SearchRequest{
     Query:        "security best practices",
-    SearchMethod: skald.SearchMethodChunkVectorSearch,
     Filters: []skald.Filter{
         {
             Field:      "source",
@@ -593,7 +582,6 @@ func main() {
     limit := 5
     searchResults, err := client.Search(ctx, skald.SearchRequest{
         Query:        "golang best practices",
-        SearchMethod: skald.SearchMethodChunkVectorSearch,
         Limit:        &limit,
     })
 
@@ -632,7 +620,6 @@ The SDK exports the following types for use in your Go code:
 type IDType string
 type FilterOperator string
 type FilterType string
-type SearchMethod string
 
 // Memo types
 type MemoData struct { ... }

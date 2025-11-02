@@ -46,18 +46,6 @@ const (
 	FilterTypeCustomMetadata FilterType = "custom_metadata"
 )
 
-// SearchMethod defines how to search for memos
-type SearchMethod string
-
-const (
-	// SearchMethodChunkVectorSearch uses semantic search on memo chunks
-	SearchMethodChunkVectorSearch SearchMethod = "chunk_vector_search"
-	// SearchMethodTitleContains searches for substring in title (case-insensitive)
-	SearchMethodTitleContains SearchMethod = "title_contains"
-	// SearchMethodTitleStartsWith searches for prefix in title (case-insensitive)
-	SearchMethodTitleStartsWith SearchMethod = "title_startswith"
-)
-
 // MemoData contains the data for creating a new memo
 type MemoData struct {
 	Title          string                 `json:"title"`
@@ -158,10 +146,9 @@ type Filter struct {
 
 // SearchRequest contains parameters for searching memos
 type SearchRequest struct {
-	Query        string       `json:"query"`
-	SearchMethod SearchMethod `json:"search_method"`
-	Limit        *int         `json:"limit,omitempty"`
-	Filters      []Filter     `json:"filters,omitempty"`
+	Query   string   `json:"query"`
+	Limit   *int     `json:"limit,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 }
 
 // SearchResult represents a single search result
@@ -194,27 +181,6 @@ type ChatResponse struct {
 
 // ChatStreamEvent represents a streaming event from chat
 type ChatStreamEvent struct {
-	Type    string  `json:"type"`
-	Content *string `json:"content,omitempty"`
-}
-
-// GenerateDocRequest contains parameters for document generation
-type GenerateDocRequest struct {
-	Prompt  string   `json:"prompt"`
-	Rules   *string  `json:"rules,omitempty"`
-	Stream  bool     `json:"stream"`
-	Filters []Filter `json:"filters,omitempty"`
-}
-
-// GenerateDocResponse is the response from a non-streaming document generation
-type GenerateDocResponse struct {
-	OK                bool          `json:"ok"`
-	Response          string        `json:"response"`
-	IntermediateSteps []interface{} `json:"intermediate_steps"`
-}
-
-// GenerateDocStreamEvent represents a streaming event from document generation
-type GenerateDocStreamEvent struct {
 	Type    string  `json:"type"`
 	Content *string `json:"content,omitempty"`
 }

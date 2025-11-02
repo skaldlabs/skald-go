@@ -25,9 +25,8 @@ func main() {
 	fmt.Println("=== Semantic Search ===")
 	limit := 10
 	searchResp, err := client.Search(ctx, skald.SearchRequest{
-		Query:        "golang best practices",
-		SearchMethod: skald.SearchMethodChunkVectorSearch,
-		Limit:        &limit,
+		Query: "golang best practices",
+		Limit: &limit,
 	})
 
 	if err != nil {
@@ -44,9 +43,8 @@ func main() {
 	// Example 2: Title search with contains
 	fmt.Println("=== Title Contains Search ===")
 	titleSearchResp, err := client.Search(ctx, skald.SearchRequest{
-		Query:        "example",
-		SearchMethod: skald.SearchMethodTitleContains,
-		Limit:        &limit,
+		Query: "example",
+		Limit: &limit,
 	})
 
 	if err != nil {
@@ -62,9 +60,8 @@ func main() {
 	// Example 3: Search with filters
 	fmt.Println("=== Search with Filters ===")
 	filteredSearchResp, err := client.Search(ctx, skald.SearchRequest{
-		Query:        "programming",
-		SearchMethod: skald.SearchMethodChunkVectorSearch,
-		Limit:        &limit,
+		Query: "programming",
+		Limit: &limit,
 		Filters: []skald.Filter{
 			{
 				Field:      "source",

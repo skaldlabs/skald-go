@@ -322,9 +322,8 @@ func TestSearch(t *testing.T) {
 
 	limit := 10
 	resp, err := client.Search(context.Background(), SearchRequest{
-		Query:        "test query",
-		SearchMethod: SearchMethodChunkVectorSearch,
-		Limit:        &limit,
+		Query: "test query",
+		Limit: &limit,
 	})
 
 	if err != nil {
@@ -351,9 +350,8 @@ func TestSearchWithFilters(t *testing.T) {
 
 	limit := 10
 	_, err := client.Search(context.Background(), SearchRequest{
-		Query:        "test query",
-		SearchMethod: SearchMethodChunkVectorSearch,
-		Limit:        &limit,
+		Query: "test query",
+		Limit: &limit,
 		Filters: []Filter{
 			{
 				Field:      "source",
@@ -403,10 +401,7 @@ func TestChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.OK {
-		t.Error("expected OK to be true")
-	}
-	if !strings.Contains(resp.Response, "[[1]]") {
+	if !strings.Contains(resp, "[[1]]") {
 		t.Error("expected citation in response")
 	}
 }
@@ -530,91 +525,6 @@ data: {"type":"done"}
 	// Ping lines should be skipped
 	if len(events) != 2 {
 		t.Errorf("expected 2 events (ping lines skipped), got %d", len(events))
-	}
-}
-
-func TestGenerateDoc(t *testing.T) {
-	client := newMockClient(func(req *http.Request) (*http.Response, error) {
-		if req.Method != "POST" {
-			t.Errorf("expected POST request, got %s", req.Method)
-		}
-		if req.URL.Path != "/api/v1/generate" {
-			t.Errorf("expected path /api/v1/generate, got %s", req.URL.Path)
-		}
-
-		// Verify stream is false
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body: %v", err)
-		}
-		if !strings.Contains(string(body), `"stream":false`) {
-			t.Error("expected stream to be false")
-		}
-
-		return mockResponse(200, `{
-			"ok": true,
-			"response": "Generated document with citation [[1]]",
-			"intermediate_steps": []
-		}`), nil
-	})
-
-	rules := "Use formal tone"
-	resp, err := client.GenerateDoc(context.Background(), "Write a report", &rules, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !resp.OK {
-		t.Error("expected OK to be true")
-	}
-	if !strings.Contains(resp.Response, "[[1]]") {
-		t.Error("expected citation in response")
-	}
-}
-
-func TestStreamedGenerateDoc(t *testing.T) {
-	sseData := `data: {"type":"token","content":"Document"}
-data: {"type":"token","content":" content"}
-data: {"type":"done"}
-`
-
-	client := newMockClient(func(req *http.Request) (*http.Response, error) {
-		if req.Method != "POST" {
-			t.Errorf("expected POST request, got %s", req.Method)
-		}
-		if req.URL.Path != "/api/v1/generate" {
-			t.Errorf("expected path /api/v1/generate, got %s", req.URL.Path)
-		}
-
-		// Verify stream is true
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body: %v", err)
-		}
-		if !strings.Contains(string(body), `"stream":true`) {
-			t.Error("expected stream to be true")
-		}
-
-		return mockResponse(200, sseData), nil
-	})
-
-	eventChan, errChan := client.StreamedGenerateDoc(context.Background(), "test prompt", nil, nil)
-
-	var events []GenerateDocStreamEvent
-	for event := range eventChan {
-		events = append(events, event)
-	}
-
-	// Check for errors
-	select {
-	case err := <-errChan:
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	default:
-	}
-
-	if len(events) != 3 {
-		t.Errorf("expected 3 events, got %d", len(events))
 	}
 }
 

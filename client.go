@@ -220,8 +220,8 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 	return &result, nil
 }
 
-// Chat performs a non-streaming chat query
-func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (*ChatResponse, error) {
+// Chat performs a non-streaming chat query and returns the response text
+func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (string, error) {
 	chatReq := ChatRequest{
 		Query:   query,
 		Stream:  false,
@@ -230,25 +230,25 @@ func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (*Cha
 
 	body, err := json.Marshal(chatReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal chat request: %w", err)
+		return "", fmt.Errorf("failed to marshal chat request: %w", err)
 	}
 
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/chat", nil, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	var result ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &result, nil
+	return result.Response, nil
 }
 
 // StreamedChat performs a streaming chat query
@@ -287,89 +287,6 @@ func (c *Client) StreamedChat(ctx context.Context, query string, filters []Filte
 		if err := c.parseSSEStream(resp.Body, eventChan); err != nil {
 			errChan <- err
 			return
-		}
-	}()
-
-	return eventChan, errChan
-}
-
-// GenerateDoc performs a non-streaming document generation
-func (c *Client) GenerateDoc(ctx context.Context, prompt string, rules *string, filters []Filter) (*GenerateDocResponse, error) {
-	genReq := GenerateDocRequest{
-		Prompt:  prompt,
-		Rules:   rules,
-		Stream:  false,
-		Filters: filters,
-	}
-
-	body, err := json.Marshal(genReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal generate request: %w", err)
-	}
-
-	resp, err := c.doRequest(ctx, "POST", "/api/v1/generate", nil, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if err := c.checkResponse(resp); err != nil {
-		return nil, err
-	}
-
-	var result GenerateDocResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// StreamedGenerateDoc performs a streaming document generation
-func (c *Client) StreamedGenerateDoc(ctx context.Context, prompt string, rules *string, filters []Filter) (<-chan GenerateDocStreamEvent, <-chan error) {
-	eventChan := make(chan GenerateDocStreamEvent)
-	errChan := make(chan error, 1)
-
-	go func() {
-		defer close(eventChan)
-		defer close(errChan)
-
-		genReq := GenerateDocRequest{
-			Prompt:  prompt,
-			Rules:   rules,
-			Stream:  true,
-			Filters: filters,
-		}
-
-		body, err := json.Marshal(genReq)
-		if err != nil {
-			errChan <- fmt.Errorf("failed to marshal generate request: %w", err)
-			return
-		}
-
-		resp, err := c.doRequest(ctx, "POST", "/api/v1/generate", nil, bytes.NewReader(body))
-		if err != nil {
-			errChan <- err
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if err := c.checkResponse(resp); err != nil {
-			errChan <- err
-			return
-		}
-
-		// Convert ChatStreamEvent to GenerateDocStreamEvent
-		chatEventChan := make(chan ChatStreamEvent)
-		go func() {
-			defer close(chatEventChan)
-			if err := c.parseSSEStream(resp.Body, chatEventChan); err != nil {
-				errChan <- err
-			}
-		}()
-
-		for event := range chatEventChan {
-			eventChan <- GenerateDocStreamEvent(event)
 		}
 	}()
 
