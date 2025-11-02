@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/skald-org/skald-go"
+	"github.com/skaldlabs/skald-go"
 )
 
 func main() {

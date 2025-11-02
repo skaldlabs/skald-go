@@ -5,7 +5,7 @@ Go client library for the Skald API.
 ## Installation
 
 ```bash
-go get github.com/skald-org/skald-go
+go get github.com/skaldlabs/skald-go
 ```
 
 ## Requirements
@@ -17,7 +17,7 @@ go get github.com/skald-org/skald-go
 ### Initialize the client
 
 ```go
-import "github.com/skald-org/skald-go"
+import "github.com/skaldlabs/skald-go"
 
 client := skald.NewClient("your-api-key-here")
 ```
@@ -550,7 +550,7 @@ import (
     "log"
     "time"
 
-    "github.com/skald-org/skald-go"
+    "github.com/skaldlabs/skald-go"
 )
 
 func main() {

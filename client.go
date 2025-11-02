@@ -320,7 +320,7 @@ func (c *Client) checkResponse(resp *http.Response) error {
 	}
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("Skald API error (%d): %s", resp.StatusCode, string(bodyBytes))
+	return fmt.Errorf("skald API error (%d): %s", resp.StatusCode, string(bodyBytes))
 }
 
 // parseSSEStream parses Server-Sent Events stream
@@ -336,11 +336,9 @@ func (c *Client) parseSSEStream(body io.Reader, eventChan chan<- ChatStreamEvent
 		}
 
 		// Parse data lines
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-
+		if after, ok := strings.CutPrefix(line, "data: "); ok {
 			var event ChatStreamEvent
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
+			if err := json.Unmarshal([]byte(after), &event); err != nil {
 				// Skip invalid JSON
 				continue
 			}

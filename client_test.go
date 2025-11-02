@@ -87,7 +87,7 @@ func TestCreateMemo(t *testing.T) {
 		if req.Header.Get("Authorization") != "Bearer test-api-key" {
 			t.Errorf("expected Authorization header with Bearer token")
 		}
-		return mockResponse(200, `{"ok": true}`), nil
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
 	})
 
 	resp, err := client.CreateMemo(context.Background(), MemoData{
@@ -98,8 +98,8 @@ func TestCreateMemo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.OK {
-		t.Error("expected OK to be true")
+	if resp.MemoUUID.String() != "123e4567-e89b-12d3-a456-426614174000" {
+		t.Error("expected MemoUUID to be 123e4567-e89b-12d3-a456-426614174000")
 	}
 }
 
@@ -111,7 +111,7 @@ func TestCreateMemoInitializesMetadata(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read request body: %v", err)
 		}
-		return mockResponse(200, `{"ok": true}`), nil
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
 	})
 
 	_, err := client.CreateMemo(context.Background(), MemoData{
@@ -266,7 +266,7 @@ func TestUpdateMemo(t *testing.T) {
 		if req.URL.Path != "/api/v1/memo/test-uuid" {
 			t.Errorf("expected path /api/v1/memo/test-uuid, got %s", req.URL.Path)
 		}
-		return mockResponse(200, `{"ok": true}`), nil
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
 	})
 
 	title := "Updated Title"
@@ -277,7 +277,7 @@ func TestUpdateMemo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.OK {
+	if resp.MemoUUID.String() != "123e4567-e89b-12d3-a456-426614174000" {
 		t.Error("expected OK to be true")
 	}
 }
