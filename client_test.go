@@ -322,8 +322,8 @@ func TestSearch(t *testing.T) {
 
 	limit := 10
 	resp, err := client.Search(context.Background(), SearchRequest{
-		Query:        "test query",
-		Limit:        &limit,
+		Query: "test query",
+		Limit: &limit,
 	})
 
 	if err != nil {
@@ -350,8 +350,8 @@ func TestSearchWithFilters(t *testing.T) {
 
 	limit := 10
 	_, err := client.Search(context.Background(), SearchRequest{
-		Query:        "test query",
-		Limit:        &limit,
+		Query: "test query",
+		Limit: &limit,
 		Filters: []Filter{
 			{
 				Field:      "source",

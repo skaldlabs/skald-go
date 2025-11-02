@@ -142,9 +142,9 @@ type Filter struct {
 
 // SearchRequest contains parameters for searching memos
 type SearchRequest struct {
-	Query        string       `json:"query"`
-	Limit        *int         `json:"limit,omitempty"`
-	Filters      []Filter     `json:"filters,omitempty"`
+	Query   string   `json:"query"`
+	Limit   *int     `json:"limit,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 }
 
 // SearchResult represents a single search result
