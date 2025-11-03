@@ -221,10 +221,16 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 }
 
 // Chat performs a non-streaming chat query and returns the response text
-func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (string, error) {
+func (c *Client) Chat(ctx context.Context, query string, filters []Filter, systemPrompt ...string) (string, error) {
+	var sp string
+	if len(systemPrompt) > 0 {
+		sp = systemPrompt[0]
+	}
+	
 	chatReq := ChatRequest{
 		Query:   query,
 		Stream:  false,
+		SystemPrompt: sp,
 		Filters: filters,
 	}
 
@@ -252,7 +258,7 @@ func (c *Client) Chat(ctx context.Context, query string, filters []Filter) (stri
 }
 
 // StreamedChat performs a streaming chat query
-func (c *Client) StreamedChat(ctx context.Context, query string, filters []Filter) (<-chan ChatStreamEvent, <-chan error) {
+func (c *Client) StreamedChat(ctx context.Context, query string, filters []Filter, systemPrompt ...string) (<-chan ChatStreamEvent, <-chan error) {
 	eventChan := make(chan ChatStreamEvent)
 	errChan := make(chan error, 1)
 
@@ -260,9 +266,15 @@ func (c *Client) StreamedChat(ctx context.Context, query string, filters []Filte
 		defer close(eventChan)
 		defer close(errChan)
 
+		var sp string
+		if len(systemPrompt) > 0 {
+			sp = systemPrompt[0]
+		}
+
 		chatReq := ChatRequest{
 			Query:   query,
 			Stream:  true,
+			SystemPrompt: sp,
 			Filters: filters,
 		}
 

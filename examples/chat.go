@@ -28,7 +28,7 @@ func main() {
 		log.Fatalf("Failed to chat: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", chatResp.Response)
+	fmt.Printf("Response: %s\n\n", chatResp)
 
 	// Example 2: Chat with filters
 	fmt.Println("=== Chat with Filters ===")
@@ -45,7 +45,7 @@ func main() {
 		log.Fatalf("Failed to chat with filters: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", filteredChatResp.Response)
+	fmt.Printf("Response: %s\n\n", filteredChatResp)
 
 	// Example 3: Streaming chat
 	fmt.Println("=== Streaming Chat ===")
@@ -60,6 +60,16 @@ func main() {
 			break
 		}
 	}
+
+	// Example 4: Chat with system prompt
+	fmt.Println("=== Chat with System Prompt ===")
+	systemPrompt := "You are a helpful assistant that answers questions about Go."
+	systemChatResp, err := client.Chat(ctx, "What are the main features of Go?", nil, systemPrompt)
+	if err != nil {
+		log.Fatalf("Failed to chat with system prompt: %v", err)
+	}
+
+	fmt.Printf("Response: %s\n\n", systemChatResp)
 
 	// Check for errors
 	select {

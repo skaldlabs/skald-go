@@ -55,6 +55,7 @@ Demonstrates:
 - Simple chat queries
 - Chat with filters
 - Streaming chat for real-time responses
+- Chat with a system_prompt
 
 Run:
 ```bash

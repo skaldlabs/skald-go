@@ -290,6 +290,7 @@ default:
 #### Chat Parameters
 
 - `query` (string, required) - The question to ask
+- `system_prompt` (string, optional) - A system prompt to guide the AI's behavior
 - `filters` ([]Filter, optional) - Array of filter objects to focus chat context on specific sources (see Filters section below)
 
 #### Chat Response

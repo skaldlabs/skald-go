@@ -169,6 +169,7 @@ type SearchResponse struct {
 type ChatRequest struct {
 	Query   string   `json:"query"`
 	Stream  bool     `json:"stream"`
+	SystemPrompt string `json:"system_prompt,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
 }
 
