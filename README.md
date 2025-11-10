@@ -253,11 +253,13 @@ if err != nil {
     log.Fatal(err)
 }
 
-fmt.Println(result)
+fmt.Println(result.Response)
 // "The main points discussed in the Q1 meeting were:
 // 1. Revenue targets [[1]]
 // 2. Hiring plans [[2]]
 // 3. Product roadmap [[1]][[3]]"
+
+fmt.Println(result.OK) // true
 ```
 
 #### Streaming Chat
@@ -505,6 +507,10 @@ result, err := client.Chat(ctx, skald.ChatParams{
         },
     },
 })
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(result.Response)
 ```
 
 #### Filters with Document Generation
@@ -607,7 +613,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("Answer: %s\n", chatResp)
+    fmt.Printf("Answer: %s\n", chatResp.Response)
 
     // Generate a document
     rules := "Use bullet points and be concise"

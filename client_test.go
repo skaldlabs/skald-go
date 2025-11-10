@@ -403,7 +403,16 @@ func TestChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(resp, "[[1]]") {
+
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	if !resp.OK {
+		t.Error("expected OK to be true")
+	}
+
+	if !strings.Contains(resp.Response, "[[1]]") {
 		t.Error("expected citation in response")
 	}
 }

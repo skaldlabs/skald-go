@@ -220,8 +220,8 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 	return &result, nil
 }
 
-// Chat performs a non-streaming chat query and returns the response text
-func (c *Client) Chat(ctx context.Context, params ChatParams) (string, error) {
+// Chat performs a non-streaming chat query and returns the response
+func (c *Client) Chat(ctx context.Context, params ChatParams) (*ChatResponse, error) {
 	chatReq := chatRequest{
 		Query:        params.Query,
 		Stream:       false,
@@ -231,25 +231,25 @@ func (c *Client) Chat(ctx context.Context, params ChatParams) (string, error) {
 
 	body, err := json.Marshal(chatReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal chat request: %w", err)
+		return nil, fmt.Errorf("failed to marshal chat request: %w", err)
 	}
 
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/chat", nil, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var result ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result.Response, nil
+	return &result, nil
 }
 
 // StreamedChat performs a streaming chat query

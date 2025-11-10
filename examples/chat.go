@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("Failed to chat: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", chatResp)
+	fmt.Printf("Response: %s\n\n", chatResp.Response)
 
 	// Example 2: Chat with filters
 	fmt.Println("=== Chat with Filters ===")
@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("Failed to chat with filters: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", filteredChatResp)
+	fmt.Printf("Response: %s\n\n", filteredChatResp.Response)
 
 	// Example 3: Streaming chat
 	fmt.Println("=== Streaming Chat ===")
@@ -79,7 +79,7 @@ func main() {
 		log.Fatalf("Failed to chat with system prompt: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", systemChatResp)
+	fmt.Printf("Response: %s\n\n", systemChatResp.Response)
 
 	// Check for errors
 	select {
