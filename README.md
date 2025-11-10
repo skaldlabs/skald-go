@@ -246,18 +246,18 @@ Ask questions about your memos using an AI agent. The agent retrieves relevant c
 #### Non-Streaming Chat
 
 ```go
-result, err := client.Chat(ctx, "What were the main points discussed in the Q1 meeting?", nil)
+result, err := client.Chat(ctx, skald.ChatParams{
+    Query: "What were the main points discussed in the Q1 meeting?",
+})
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Println(result.Response)
+fmt.Println(result)
 // "The main points discussed in the Q1 meeting were:
 // 1. Revenue targets [[1]]
 // 2. Hiring plans [[2]]
 // 3. Product roadmap [[1]][[3]]"
-
-fmt.Println(result.OK) // true
 ```
 
 #### Streaming Chat
@@ -265,7 +265,9 @@ fmt.Println(result.OK) // true
 For real-time responses, use streaming chat:
 
 ```go
-eventChan, errChan := client.StreamedChat(ctx, "What are our quarterly goals?", nil)
+eventChan, errChan := client.StreamedChat(ctx, skald.ChatParams{
+    Query: "What are our quarterly goals?",
+})
 
 for event := range eventChan {
     if event.Type == "token" && event.Content != nil {
@@ -492,12 +494,15 @@ results, err := client.Search(ctx, skald.SearchRequest{
 Focus chat context on specific sources:
 
 ```go
-result, err := client.Chat(ctx, "What are our security practices?", []skald.Filter{
-    {
-        Field:      "tags",
-        Operator:   skald.FilterOperatorIn,
-        Value:      []string{"security", "compliance"},
-        FilterType: skald.FilterTypeNativeField,
+result, err := client.Chat(ctx, skald.ChatParams{
+    Query: "What are our security practices?",
+    Filters: []skald.Filter{
+        {
+            Field:      "tags",
+            Operator:   skald.FilterOperatorIn,
+            Value:      []string{"security", "compliance"},
+            FilterType: skald.FilterTypeNativeField,
+        },
     },
 })
 ```
@@ -596,11 +601,13 @@ func main() {
     }
 
     // Chat with knowledge base
-    chatResp, err := client.Chat(ctx, "What are Go best practices?", nil)
+    chatResp, err := client.Chat(ctx, skald.ChatParams{
+        Query: "What are Go best practices?",
+    })
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("Answer: %s\n", chatResp.Response)
+    fmt.Printf("Answer: %s\n", chatResp)
 
     // Generate a document
     rules := "Use bullet points and be concise"
