@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Client is the main Skald SDK client
@@ -103,16 +104,56 @@ func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoDa
 		return nil, fmt.Errorf("failed to copy file content: %w", err)
 	}
 
-	// Add memo data if provided
+	// Add memo data fields if provided
 	if memoData != nil {
-		// Convert memoData to JSON
-		memoDataJSON, err := json.Marshal(memoData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal memo data: %w", err)
+		// Add title field
+		if memoData.Title != nil {
+			if err := writer.WriteField("title", *memoData.Title); err != nil {
+				return nil, fmt.Errorf("failed to write title field: %w", err)
+			}
 		}
 
-		if err := writer.WriteField("memo_data", string(memoDataJSON)); err != nil {
-			return nil, fmt.Errorf("failed to write memo data field: %w", err)
+		// Add source field
+		if memoData.Source != nil {
+			if err := writer.WriteField("source", *memoData.Source); err != nil {
+				return nil, fmt.Errorf("failed to write source field: %w", err)
+			}
+		}
+
+		// Add reference_id field
+		if memoData.ReferenceID != nil {
+			if err := writer.WriteField("reference_id", *memoData.ReferenceID); err != nil {
+				return nil, fmt.Errorf("failed to write reference_id field: %w", err)
+			}
+		}
+
+		// Add tags as JSON array
+		if len(memoData.Tags) > 0 {
+			tagsJSON, err := json.Marshal(memoData.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tags: %w", err)
+			}
+			if err := writer.WriteField("tags", string(tagsJSON)); err != nil {
+				return nil, fmt.Errorf("failed to write tags field: %w", err)
+			}
+		}
+
+		// Add metadata as JSON
+		if len(memoData.Metadata) > 0 {
+			metadataJSON, err := json.Marshal(memoData.Metadata)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+			}
+			if err := writer.WriteField("metadata", string(metadataJSON)); err != nil {
+				return nil, fmt.Errorf("failed to write metadata field: %w", err)
+			}
+		}
+
+		// Add expiration_date field (RFC3339 format)
+		if memoData.ExpirationDate != nil {
+			if err := writer.WriteField("expiration_date", memoData.ExpirationDate.Format(time.RFC3339)); err != nil {
+				return nil, fmt.Errorf("failed to write expiration_date field: %w", err)
+			}
 		}
 	}
 

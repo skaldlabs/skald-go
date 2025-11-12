@@ -69,7 +69,7 @@ func main() {
 			fmt.Println("\nDocument processed successfully!")
 
 			// Retrieve the processed memo
-			memo, err := client.GetMemo(ctx, memoUUID)
+			memo, err := client.GetMemo(ctx, "local-currency-snippet", skald.IDTypeReferenceID)
 			if err != nil {
 				log.Fatalf("Failed to retrieve memo: %v", err)
 			}
