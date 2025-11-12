@@ -407,6 +407,7 @@ func TestChat(t *testing.T) {
 
 	if resp == nil {
 		t.Fatal("expected non-nil response")
+		return
 	}
 
 	if !resp.OK {
@@ -625,7 +626,7 @@ func TestCreateMemoFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write some test content
 	content := []byte("test PDF content")
@@ -674,7 +675,7 @@ func TestCreateMemoFromFileWithoutMemoData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content := []byte("test PDF content")
 	if _, err := tmpFile.Write(content); err != nil {
@@ -712,7 +713,7 @@ func TestCreateMemoFromFileTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Seek to create a file larger than 100MB (we don't need to write the actual data)
 	const largeSize = 101 * 1024 * 1024 // 101MB
