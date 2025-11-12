@@ -22,22 +22,20 @@ func main() {
 
 	// Path to the file you want to upload
 	// Supported formats: PDF, DOC, DOCX, PPTX (max 100MB)
-	filePath := "document.pdf"
+	filePath := "examples/localcurrency-snippet.pdf"
 
 	// Optional: Provide metadata for the memo
-	title := "Q4 Business Report"
-	source := "reports"
-	refID := "report-2024-q4"
+	title := "Overcoming economic instability with programmable money (Snippet)"
+	source := "google-scholar"
+	refID := "local-currency-snippet"
 
 	memoData := &skald.MemoFileData{
 		Title:       &title,
 		Source:      &source,
 		ReferenceID: &refID,
-		Tags:        []string{"business", "quarterly", "report"},
+		Tags:        []string{"research", "paper", "article"},
 		Metadata: map[string]interface{}{
-			"year":       2024,
-			"quarter":    "Q4",
-			"department": "Finance",
+			"journal":    "Journal of Risk Finance",
 		},
 	}
 

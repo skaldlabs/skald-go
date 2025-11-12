@@ -121,7 +121,7 @@ func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoDa
 	}
 
 	// Create request
-	urlStr := c.baseURL + "/api/v1/memo/upload"
+	urlStr := c.baseURL + "/api/v1/memo"
 	req, err := http.NewRequestWithContext(ctx, "POST", urlStr, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
