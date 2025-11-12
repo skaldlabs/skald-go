@@ -7,9 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Client is the main Skald SDK client
@@ -48,6 +52,129 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/memo", nil, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := c.checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var result CreateMemoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// CreateMemoFromFile creates a new memo by uploading a file
+// Supported file formats: PDF, DOC, DOCX, PPTX
+// Maximum file size: 100MB
+func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoData *MemoFileData) (*CreateMemoResponse, error) {
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Get file info for validation
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	// Check file size (100MB limit)
+	const maxFileSize = 100 * 1024 * 1024 // 100MB
+	if fileInfo.Size() > maxFileSize {
+		return nil, fmt.Errorf("file size exceeds 100MB limit")
+	}
+
+	// Create multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add file field
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("failed to copy file content: %w", err)
+	}
+
+	// Add memo data fields if provided
+	if memoData != nil {
+		// Add title field
+		if memoData.Title != nil {
+			if err := writer.WriteField("title", *memoData.Title); err != nil {
+				return nil, fmt.Errorf("failed to write title field: %w", err)
+			}
+		}
+
+		// Add source field
+		if memoData.Source != nil {
+			if err := writer.WriteField("source", *memoData.Source); err != nil {
+				return nil, fmt.Errorf("failed to write source field: %w", err)
+			}
+		}
+
+		// Add reference_id field
+		if memoData.ReferenceID != nil {
+			if err := writer.WriteField("reference_id", *memoData.ReferenceID); err != nil {
+				return nil, fmt.Errorf("failed to write reference_id field: %w", err)
+			}
+		}
+
+		// Add tags as JSON array
+		if len(memoData.Tags) > 0 {
+			tagsJSON, err := json.Marshal(memoData.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tags: %w", err)
+			}
+			if err := writer.WriteField("tags", string(tagsJSON)); err != nil {
+				return nil, fmt.Errorf("failed to write tags field: %w", err)
+			}
+		}
+
+		// Add metadata as JSON
+		if len(memoData.Metadata) > 0 {
+			metadataJSON, err := json.Marshal(memoData.Metadata)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+			}
+			if err := writer.WriteField("metadata", string(metadataJSON)); err != nil {
+				return nil, fmt.Errorf("failed to write metadata field: %w", err)
+			}
+		}
+
+		// Add expiration_date field (RFC3339 format)
+		if memoData.ExpirationDate != nil {
+			if err := writer.WriteField("expiration_date", memoData.ExpirationDate.Format(time.RFC3339)); err != nil {
+				return nil, fmt.Errorf("failed to write expiration_date field: %w", err)
+			}
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	// Create request
+	urlStr := c.baseURL + "/api/v1/memo"
+	req, err := http.NewRequestWithContext(ctx, "POST", urlStr, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Execute request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -193,6 +320,41 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 	}
 
 	return nil
+}
+
+// CheckMemoStatus checks the processing status of a memo
+// The memo can be identified by UUID (default) or reference ID
+func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...IDType) (*MemoStatusResponse, error) {
+	idTypeValue := IDTypeMemoUUID
+	if len(idType) > 0 {
+		idTypeValue = idType[0]
+		if idTypeValue != IDTypeMemoUUID && idTypeValue != IDTypeReferenceID {
+			return nil, fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
+		}
+	}
+
+	params := url.Values{}
+	if idTypeValue != IDTypeMemoUUID {
+		params.Set("id_type", string(idTypeValue))
+	}
+
+	path := fmt.Sprintf("/api/v1/memo/%s/status", url.PathEscape(memoID))
+	resp, err := c.doRequest(ctx, "GET", path, params, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := c.checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var status MemoStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &status, nil
 }
 
 // Search searches for memos
