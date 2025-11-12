@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -615,5 +616,218 @@ func TestMemoWithAllFields(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCreateMemoFromFile(t *testing.T) {
+	// Create a temporary test file
+	tmpFile, err := os.CreateTemp("", "test-*.pdf")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write some test content
+	content := []byte("test PDF content")
+	if _, err := tmpFile.Write(content); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("failed to close temp file: %v", err)
+	}
+
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		if req.Method != "POST" {
+			t.Errorf("expected POST request, got %s", req.Method)
+		}
+		if req.URL.Path != "/api/v1/memo/upload" {
+			t.Errorf("expected path /api/v1/memo/upload, got %s", req.URL.Path)
+		}
+		if req.Header.Get("Authorization") != "Bearer test-api-key" {
+			t.Errorf("expected Authorization header with Bearer token")
+		}
+		if !strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Errorf("expected multipart/form-data content type")
+		}
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
+	})
+
+	title := "Test Document"
+	source := "test-source"
+	resp, err := client.CreateMemoFromFile(context.Background(), tmpFile.Name(), &MemoFileData{
+		Title:  &title,
+		Source: &source,
+		Tags:   []string{"test", "document"},
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.MemoUUID.String() != "123e4567-e89b-12d3-a456-426614174000" {
+		t.Error("expected MemoUUID to be 123e4567-e89b-12d3-a456-426614174000")
+	}
+}
+
+func TestCreateMemoFromFileWithoutMemoData(t *testing.T) {
+	// Create a temporary test file
+	tmpFile, err := os.CreateTemp("", "test-*.pdf")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	content := []byte("test PDF content")
+	if _, err := tmpFile.Write(content); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("failed to close temp file: %v", err)
+	}
+
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
+	})
+
+	resp, err := client.CreateMemoFromFile(context.Background(), tmpFile.Name(), nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.MemoUUID.String() != "123e4567-e89b-12d3-a456-426614174000" {
+		t.Error("expected MemoUUID to be 123e4567-e89b-12d3-a456-426614174000")
+	}
+}
+
+func TestCreateMemoFromFileNotFound(t *testing.T) {
+	client := NewClient("test-key")
+	_, err := client.CreateMemoFromFile(context.Background(), "/nonexistent/file.pdf", nil)
+	if err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestCreateMemoFromFileTooLarge(t *testing.T) {
+	// Create a temporary test file that exceeds the size limit
+	tmpFile, err := os.CreateTemp("", "test-large-*.pdf")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Seek to create a file larger than 100MB (we don't need to write the actual data)
+	const largeSize = 101 * 1024 * 1024 // 101MB
+	if err := tmpFile.Truncate(largeSize); err != nil {
+		t.Fatalf("failed to truncate file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("failed to close temp file: %v", err)
+	}
+
+	client := NewClient("test-key")
+	_, err = client.CreateMemoFromFile(context.Background(), tmpFile.Name(), nil)
+	if err == nil {
+		t.Error("expected error for file exceeding size limit")
+	}
+	if !strings.Contains(err.Error(), "100MB") {
+		t.Errorf("expected error message about 100MB limit, got: %v", err)
+	}
+}
+
+func TestCheckMemoStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		memoID         string
+		idType         IDType
+		expectedPath   string
+		expectedParams string
+		responseStatus string
+		expectedStatus MemoStatus
+	}{
+		{
+			name:           "status by UUID - processing",
+			memoID:         "test-uuid",
+			idType:         IDTypeMemoUUID,
+			expectedPath:   "/api/v1/memo/test-uuid/status",
+			expectedParams: "",
+			responseStatus: `{"status": "processing"}`,
+			expectedStatus: MemoStatusProcessing,
+		},
+		{
+			name:           "status by UUID - processed",
+			memoID:         "test-uuid",
+			idType:         IDTypeMemoUUID,
+			expectedPath:   "/api/v1/memo/test-uuid/status",
+			expectedParams: "",
+			responseStatus: `{"status": "processed"}`,
+			expectedStatus: MemoStatusProcessed,
+		},
+		{
+			name:           "status by UUID - error",
+			memoID:         "test-uuid",
+			idType:         IDTypeMemoUUID,
+			expectedPath:   "/api/v1/memo/test-uuid/status",
+			expectedParams: "",
+			responseStatus: `{"status": "error", "error_reason": "Processing failed"}`,
+			expectedStatus: MemoStatusError,
+		},
+		{
+			name:           "status by reference ID",
+			memoID:         "test-ref-id",
+			idType:         IDTypeReferenceID,
+			expectedPath:   "/api/v1/memo/test-ref-id/status",
+			expectedParams: "id_type=reference_id",
+			responseStatus: `{"status": "processed"}`,
+			expectedStatus: MemoStatusProcessed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newMockClient(func(req *http.Request) (*http.Response, error) {
+				if req.Method != "GET" {
+					t.Errorf("expected GET request, got %s", req.Method)
+				}
+				if req.URL.Path != tt.expectedPath {
+					t.Errorf("expected path %s, got %s", tt.expectedPath, req.URL.Path)
+				}
+				if req.URL.RawQuery != tt.expectedParams {
+					t.Errorf("expected params %s, got %s", tt.expectedParams, req.URL.RawQuery)
+				}
+				return mockResponse(200, tt.responseStatus), nil
+			})
+
+			status, err := client.CheckMemoStatus(context.Background(), tt.memoID, tt.idType)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if status.Status != tt.expectedStatus {
+				t.Errorf("expected status %s, got %s", tt.expectedStatus, status.Status)
+			}
+		})
+	}
+}
+
+func TestCheckMemoStatusWithErrorReason(t *testing.T) {
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{"status": "error", "error_reason": "File format not supported"}`), nil
+	})
+
+	status, err := client.CheckMemoStatus(context.Background(), "test-uuid")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status.Status != MemoStatusError {
+		t.Errorf("expected status error, got %s", status.Status)
+	}
+	if status.ErrorReason == nil || *status.ErrorReason != "File format not supported" {
+		t.Error("expected error reason to be 'File format not supported'")
+	}
+}
+
+func TestCheckMemoStatusInvalidIDType(t *testing.T) {
+	client := NewClient("test-key")
+	_, err := client.CheckMemoStatus(context.Background(), "test-id", IDType("invalid"))
+	if err == nil {
+		t.Error("expected error for invalid idType")
 	}
 }

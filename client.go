@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,6 +51,89 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/memo", nil, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := c.checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var result CreateMemoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// CreateMemoFromFile creates a new memo by uploading a file
+// Supported file formats: PDF, DOC, DOCX, PPTX
+// Maximum file size: 100MB
+func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoData *MemoFileData) (*CreateMemoResponse, error) {
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Get file info for validation
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	// Check file size (100MB limit)
+	const maxFileSize = 100 * 1024 * 1024 // 100MB
+	if fileInfo.Size() > maxFileSize {
+		return nil, fmt.Errorf("file size exceeds 100MB limit")
+	}
+
+	// Create multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add file field
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("failed to copy file content: %w", err)
+	}
+
+	// Add memo data if provided
+	if memoData != nil {
+		// Convert memoData to JSON
+		memoDataJSON, err := json.Marshal(memoData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal memo data: %w", err)
+		}
+
+		if err := writer.WriteField("memo_data", string(memoDataJSON)); err != nil {
+			return nil, fmt.Errorf("failed to write memo data field: %w", err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	// Create request
+	urlStr := c.baseURL + "/api/v1/memo/upload"
+	req, err := http.NewRequestWithContext(ctx, "POST", urlStr, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Execute request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -193,6 +279,41 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 	}
 
 	return nil
+}
+
+// CheckMemoStatus checks the processing status of a memo
+// The memo can be identified by UUID (default) or reference ID
+func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...IDType) (*MemoStatusResponse, error) {
+	idTypeValue := IDTypeMemoUUID
+	if len(idType) > 0 {
+		idTypeValue = idType[0]
+		if idTypeValue != IDTypeMemoUUID && idTypeValue != IDTypeReferenceID {
+			return nil, fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
+		}
+	}
+
+	params := url.Values{}
+	if idTypeValue != IDTypeMemoUUID {
+		params.Set("id_type", string(idTypeValue))
+	}
+
+	path := fmt.Sprintf("/api/v1/memo/%s/status", url.PathEscape(memoID))
+	resp, err := c.doRequest(ctx, "GET", path, params, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := c.checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var status MemoStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &status, nil
 }
 
 // Search searches for memos

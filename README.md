@@ -56,7 +56,7 @@ if err != nil {
     log.Fatal(err)
 }
 
-fmt.Println(result.OK) // true
+fmt.Println(result.MemoUUID) // UUID of created memo
 ```
 
 **Required Fields:**
@@ -69,6 +69,100 @@ fmt.Println(result.OK) // true
 - `Tags` ([]string) - Tags for categorization
 - `Source` (*string, max 255 chars) - An indication from your side of the source of this content, useful when building integrations
 - `ExpirationDate` (*time.Time) - Timestamp for automatic memo expiration
+
+#### Create a Memo from File
+
+Upload a document file to create a memo. Supported formats include PDF, DOC, DOCX, and PPTX (max 100MB):
+
+```go
+title := "Q4 Business Report"
+source := "reports"
+refID := "report-2024-q4"
+
+result, err := client.CreateMemoFromFile(ctx, "document.pdf", &skald.MemoFileData{
+    Title:       &title,
+    Source:      &source,
+    ReferenceID: &refID,
+    Tags:        []string{"business", "quarterly"},
+    Metadata: map[string]interface{}{
+        "year":    2024,
+        "quarter": "Q4",
+    },
+})
+
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Uploaded memo UUID: %s\n", result.MemoUUID)
+```
+
+**Parameters:**
+- `filePath` (string, required) - Path to the file to upload
+- `memoData` (*MemoFileData, optional) - Optional metadata for the memo
+
+**MemoFileData Fields (all optional):**
+- `Title` (*string, max 255 chars) - The title of the memo
+- `Source` (*string, max 255 chars) - Source identifier
+- `ReferenceID` (*string, max 255 chars) - Your external reference ID
+- `Tags` ([]string) - Tags for categorization
+- `Metadata` (map[string]interface{}) - Custom JSON metadata
+- `ExpirationDate` (*time.Time) - Timestamp for automatic memo expiration
+
+**Note:** File uploads are processed asynchronously. Use `CheckMemoStatus()` to monitor processing status.
+
+#### Check Memo Processing Status
+
+Monitor the processing status of a memo, especially useful after uploading files:
+
+```go
+// Check status by UUID
+status, err := client.CheckMemoStatus(ctx, memoUUID)
+
+// Check status by reference ID
+status, err := client.CheckMemoStatus(ctx, "report-2024-q4", skald.IDTypeReferenceID)
+
+if err != nil {
+    log.Fatal(err)
+}
+
+switch status.Status {
+case skald.MemoStatusProcessed:
+    fmt.Println("Memo is ready!")
+case skald.MemoStatusProcessing:
+    fmt.Println("Still processing...")
+case skald.MemoStatusError:
+    fmt.Printf("Processing failed: %s\n", *status.ErrorReason)
+}
+```
+
+**Status Values:**
+- `MemoStatusProcessing` - The memo is currently being processed
+- `MemoStatusProcessed` - The memo has been successfully processed and is ready
+- `MemoStatusError` - Processing failed (check `ErrorReason` field for details)
+
+**Example: Polling for completion**
+
+```go
+maxAttempts := 30
+pollInterval := 2 * time.Second
+
+for attempt := 1; attempt <= maxAttempts; attempt++ {
+    status, err := client.CheckMemoStatus(ctx, memoUUID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if status.Status == skald.MemoStatusProcessed {
+        fmt.Println("Processing complete!")
+        break
+    } else if status.Status == skald.MemoStatusError {
+        log.Fatalf("Processing failed: %s", *status.ErrorReason)
+    }
+
+    time.Sleep(pollInterval)
+}
+```
 
 #### Get a Memo
 
@@ -559,6 +653,7 @@ type FilterType string
 
 // Memo types
 type MemoData struct { ... }
+type MemoFileData struct { ... }
 type CreateMemoResponse struct { ... }
 type UpdateMemoData struct { ... }
 type UpdateMemoResponse struct { ... }
@@ -568,6 +663,8 @@ type ListMemosParams struct { ... }
 type ListMemosResponse struct { ... }
 type MemoTag struct { ... }
 type MemoChunk struct { ... }
+type MemoStatus string
+type MemoStatusResponse struct { ... }
 
 // Filter types
 type Filter struct { ... }

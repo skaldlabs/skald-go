@@ -194,3 +194,31 @@ type ChatStreamEvent struct {
 	Type    string  `json:"type"`
 	Content *string `json:"content,omitempty"`
 }
+
+// MemoStatus represents the processing status of a memo
+type MemoStatus string
+
+const (
+	// MemoStatusProcessing indicates the memo is being processed
+	MemoStatusProcessing MemoStatus = "processing"
+	// MemoStatusProcessed indicates the memo has been successfully processed
+	MemoStatusProcessed MemoStatus = "processed"
+	// MemoStatusError indicates the memo processing failed
+	MemoStatusError MemoStatus = "error"
+)
+
+// MemoFileData contains the data for creating a memo from a file
+type MemoFileData struct {
+	Title          *string                `json:"title,omitempty"`
+	Source         *string                `json:"source,omitempty"`
+	ReferenceID    *string                `json:"reference_id,omitempty"`
+	Tags           []string               `json:"tags,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	ExpirationDate *time.Time             `json:"expiration_date,omitempty"`
+}
+
+// MemoStatusResponse represents the response from checking memo status
+type MemoStatusResponse struct {
+	Status      MemoStatus `json:"status"`
+	ErrorReason *string    `json:"error_reason,omitempty"`
+}
