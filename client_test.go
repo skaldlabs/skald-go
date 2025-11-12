@@ -397,11 +397,22 @@ func TestChat(t *testing.T) {
 		}`), nil
 	})
 
-	resp, err := client.Chat(context.Background(), "What is the capital?", nil)
+	resp, err := client.Chat(context.Background(), ChatParams{
+		Query: "What is the capital?",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(resp, "[[1]]") {
+
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	if !resp.OK {
+		t.Error("expected OK to be true")
+	}
+
+	if !strings.Contains(resp.Response, "[[1]]") {
 		t.Error("expected citation in response")
 	}
 }
@@ -432,7 +443,9 @@ data: {"type":"done"}
 		return mockResponse(200, sseData), nil
 	})
 
-	eventChan, errChan := client.StreamedChat(context.Background(), "test query", nil)
+	eventChan, errChan := client.StreamedChat(context.Background(), ChatParams{
+		Query: "test query",
+	})
 
 	var events []ChatStreamEvent
 	for event := range eventChan {
@@ -473,7 +486,9 @@ data: {"type":"done"}
 		return mockResponse(200, sseData), nil
 	})
 
-	eventChan, errChan := client.StreamedChat(context.Background(), "test query", nil)
+	eventChan, errChan := client.StreamedChat(context.Background(), ChatParams{
+		Query: "test query",
+	})
 
 	var events []ChatStreamEvent
 	for event := range eventChan {
@@ -506,7 +521,9 @@ data: {"type":"done"}
 		return mockResponse(200, sseData), nil
 	})
 
-	eventChan, errChan := client.StreamedChat(context.Background(), "test query", nil)
+	eventChan, errChan := client.StreamedChat(context.Background(), ChatParams{
+		Query: "test query",
+	})
 
 	var events []ChatStreamEvent
 	for event := range eventChan {

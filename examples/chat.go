@@ -23,21 +23,26 @@ func main() {
 
 	// Example 1: Simple chat query
 	fmt.Println("=== Simple Chat Query ===")
-	chatResp, err := client.Chat(ctx, "What are the main features of Go?", nil)
+	chatResp, err := client.Chat(ctx, skald.ChatParams{
+		Query: "What are the main features of Go?",
+	})
 	if err != nil {
 		log.Fatalf("Failed to chat: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", chatResp)
+	fmt.Printf("Response: %s\n\n", chatResp.Response)
 
 	// Example 2: Chat with filters
 	fmt.Println("=== Chat with Filters ===")
-	filteredChatResp, err := client.Chat(ctx, "Explain error handling", []skald.Filter{
-		{
-			Field:      "language",
-			Operator:   skald.FilterOperatorEq,
-			Value:      "go",
-			FilterType: skald.FilterTypeCustomMetadata,
+	filteredChatResp, err := client.Chat(ctx, skald.ChatParams{
+		Query: "Explain error handling",
+		Filters: []skald.Filter{
+			{
+				Field:      "language",
+				Operator:   skald.FilterOperatorEq,
+				Value:      "go",
+				FilterType: skald.FilterTypeCustomMetadata,
+			},
 		},
 	})
 
@@ -45,11 +50,13 @@ func main() {
 		log.Fatalf("Failed to chat with filters: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", filteredChatResp)
+	fmt.Printf("Response: %s\n\n", filteredChatResp.Response)
 
 	// Example 3: Streaming chat
 	fmt.Println("=== Streaming Chat ===")
-	eventChan, errChan := client.StreamedChat(ctx, "What is concurrency in Go?", nil)
+	eventChan, errChan := client.StreamedChat(ctx, skald.ChatParams{
+		Query: "What is concurrency in Go?",
+	})
 
 	fmt.Print("Response: ")
 	for event := range eventChan {
@@ -64,12 +71,15 @@ func main() {
 	// Example 4: Chat with system prompt
 	fmt.Println("=== Chat with System Prompt ===")
 	systemPrompt := "You are a helpful assistant that answers questions about Go."
-	systemChatResp, err := client.Chat(ctx, "What are the main features of Go?", nil, systemPrompt)
+	systemChatResp, err := client.Chat(ctx, skald.ChatParams{
+		Query:        "What are the main features of Go?",
+		SystemPrompt: systemPrompt,
+	})
 	if err != nil {
 		log.Fatalf("Failed to chat with system prompt: %v", err)
 	}
 
-	fmt.Printf("Response: %s\n\n", systemChatResp)
+	fmt.Printf("Response: %s\n\n", systemChatResp.Response)
 
 	// Check for errors
 	select {

@@ -165,12 +165,21 @@ type SearchResponse struct {
 	Results []SearchResult `json:"results"`
 }
 
-// ChatRequest contains parameters for a chat query
-type ChatRequest struct {
-	Query   string   `json:"query"`
-	Stream  bool     `json:"stream"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
-	Filters []Filter `json:"filters,omitempty"`
+// ChatParams contains parameters for chat queries.
+// This is the public API struct that users pass to Chat() and StreamedChat() methods.
+type ChatParams struct {
+	Query        string   `json:"query"`
+	Filters      []Filter `json:"filters,omitempty"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+}
+
+// chatRequest is the internal HTTP request payload structure.
+// It includes the Stream field which is set automatically based on which method is called.
+type chatRequest struct {
+	Query        string   `json:"query"`
+	Stream       bool     `json:"stream"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+	Filters      []Filter `json:"filters,omitempty"`
 }
 
 // ChatResponse is the response from a non-streaming chat query
