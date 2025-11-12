@@ -641,8 +641,8 @@ func TestCreateMemoFromFile(t *testing.T) {
 		if req.Method != "POST" {
 			t.Errorf("expected POST request, got %s", req.Method)
 		}
-		if req.URL.Path != "/api/v1/memo/upload" {
-			t.Errorf("expected path /api/v1/memo/upload, got %s", req.URL.Path)
+		if req.URL.Path != "/api/v1/memo" {
+			t.Errorf("expected path /api/v1/memo, got %s", req.URL.Path)
 		}
 		if req.Header.Get("Authorization") != "Bearer test-api-key" {
 			t.Errorf("expected Authorization header with Bearer token")
