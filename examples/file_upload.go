@@ -35,8 +35,8 @@ func main() {
 		ReferenceID: &refID,
 		Tags:        []string{"business", "quarterly", "report"},
 		Metadata: map[string]interface{}{
-			"year":    2024,
-			"quarter": "Q4",
+			"year":       2024,
+			"quarter":    "Q4",
 			"department": "Finance",
 		},
 	}
@@ -54,8 +54,8 @@ func main() {
 	fmt.Println("Processing document...")
 
 	// Poll for status until processing is complete
-	maxAttempts := 30  // Maximum number of polling attempts
-	pollInterval := 2 * time.Second  // Wait 2 seconds between checks
+	maxAttempts := 30               // Maximum number of polling attempts
+	pollInterval := 2 * time.Second // Wait 2 seconds between checks
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Check the memo status
