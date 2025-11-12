@@ -35,7 +35,7 @@ func main() {
 		ReferenceID: &refID,
 		Tags:        []string{"research", "paper", "article"},
 		Metadata: map[string]interface{}{
-			"journal":    "Journal of Risk Finance",
+			"journal": "Journal of Risk Finance",
 		},
 	}
 
