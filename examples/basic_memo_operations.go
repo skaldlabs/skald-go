@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/skald-org/skald-go"
+	"github.com/skaldlabs/skald-go"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 
 	createResp, err := client.CreateMemo(ctx, skald.MemoData{
 		Title:   "Example Memo",
-		Content: "This is an example memo created with the Skald Go SDK. It contains information about Go programming language features.",
+		Content: "Go is a modern, statically typed, compiled programming language that is designed to be simple, safe, and efficient.",
 		Metadata: map[string]interface{}{
 			"category": "programming",
 			"language": "go",

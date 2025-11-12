@@ -308,77 +308,6 @@ Streaming responses yield events:
 - `{ Type: "token", Content: *string }` - Each text token as it's generated
 - `{ Type: "done" }` - Indicates the stream has finished
 
-### Generate Documents
-
-Generate documents based on prompts and retrieved context from your knowledge base. Similar to chat but optimized for document generation with optional style/format rules.
-
-#### Non-Streaming Document Generation
-
-```go
-rules := "Use formal business language. Include sections for: Overview, Requirements, Technical Specifications, Timeline"
-result, err := client.GenerateDoc(ctx, "Create a product requirements document for a new mobile app", &rules, nil)
-
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Println(result.Response)
-// "# Product Requirements Document
-//
-// ## Overview
-// This document outlines the requirements for...
-//
-// ## Requirements
-// 1. User authentication [[1]]
-// 2. Push notifications [[2]]..."
-
-fmt.Println(result.OK) // true
-```
-
-#### Streaming Document Generation
-
-For real-time document generation, use streaming:
-
-```go
-rules := "Include sections for: Architecture, Security, API Endpoints, Data Models"
-eventChan, errChan := client.StreamedGenerateDoc(ctx, "Write a technical specification for user authentication", &rules, nil)
-
-for event := range eventChan {
-    if event.Type == "token" && event.Content != nil {
-        // Write each token as it arrives
-        fmt.Print(*event.Content)
-    } else if event.Type == "done" {
-        fmt.Println("\nDone!")
-        break
-    }
-}
-
-// Check for errors
-select {
-case err := <-errChan:
-    if err != nil {
-        log.Fatal(err)
-    }
-default:
-}
-```
-
-#### Generate Document Parameters
-
-- `prompt` (string, required) - The prompt describing what document to generate
-- `rules` (*string, optional) - Optional style/format rules (e.g., "Use formal language. Include sections: X, Y, Z")
-- `filters` ([]Filter, optional) - Array of filter objects to control which memos are used for generation (see Filters section below)
-
-#### Generate Document Response
-
-Non-streaming responses include:
-- `OK` (bool) - Success status
-- `Response` (string) - The generated document with inline citations in format `[[N]]`
-- `IntermediateSteps` ([]interface{}) - Steps taken by the agent (for debugging)
-
-Streaming responses yield events:
-- `{ Type: "token", Content: *string }` - Each text token as it's generated
-- `{ Type: "done" }` - Indicates the stream has finished
 
 ### Filters
 
@@ -615,13 +544,6 @@ func main() {
     }
     fmt.Printf("Answer: %s\n", chatResp.Response)
 
-    // Generate a document
-    rules := "Use bullet points and be concise"
-    doc, err := client.GenerateDoc(ctx, "Create a Go style guide", &rules, nil)
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Generated document:\n%s\n", doc.Response)
 }
 ```
 
@@ -659,11 +581,6 @@ type SearchResult struct { ... }
 type ChatRequest struct { ... }
 type ChatResponse struct { ... }
 type ChatStreamEvent struct { ... }
-
-// Document generation types
-type GenerateDocRequest struct { ... }
-type GenerateDocResponse struct { ... }
-type GenerateDocStreamEvent struct { ... }
 ```
 
 See the [types.go](types.go) file for complete type definitions.
