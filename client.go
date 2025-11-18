@@ -357,6 +357,41 @@ func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...I
 	return &status, nil
 }
 
+// WaitForMemoReady polls the memo status until it's processed or an error occurs.
+// It returns when the memo is processed, or an error if processing fails or context is cancelled.
+// The pollInterval specifies how long to wait between status checks.
+func (c *Client) WaitForMemoReady(ctx context.Context, memoID string, pollInterval time.Duration, idType ...IDType) error {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		status, err := c.CheckMemoStatus(ctx, memoID, idType...)
+		if err != nil {
+			return err
+		}
+
+		switch status.Status {
+		case MemoStatusProcessed:
+			return nil
+		case MemoStatusError:
+			errMsg := "memo processing failed"
+			if status.ErrorReason != nil {
+				errMsg = *status.ErrorReason
+			}
+			return fmt.Errorf("%s", errMsg)
+		case MemoStatusProcessing:
+			// Continue polling
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			// Continue to next iteration
+		}
+	}
+}
+
 // Search searches for memos
 func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchResponse, error) {
 	body, err := json.Marshal(searchReq)
@@ -389,6 +424,8 @@ func (c *Client) Chat(ctx context.Context, params ChatParams) (*ChatResponse, er
 		Stream:       false,
 		SystemPrompt: params.SystemPrompt,
 		Filters:      params.Filters,
+		ChatID:       params.ChatID,
+		RAGConfig:    params.RAGConfig,
 	}
 
 	body, err := json.Marshal(chatReq)
@@ -428,6 +465,8 @@ func (c *Client) StreamedChat(ctx context.Context, params ChatParams) (<-chan Ch
 			Stream:       true,
 			SystemPrompt: params.SystemPrompt,
 			Filters:      params.Filters,
+			ChatID:       params.ChatID,
+			RAGConfig:    params.RAGConfig,
 		}
 
 		body, err := json.Marshal(chatReq)
@@ -484,7 +523,10 @@ func (c *Client) checkResponse(resp *http.Response) error {
 	}
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("skald API error (%d): %s", resp.StatusCode, string(bodyBytes))
+	return &APIError{
+		StatusCode: resp.StatusCode,
+		Message:    string(bodyBytes),
+	}
 }
 
 // parseSSEStream parses Server-Sent Events stream

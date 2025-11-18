@@ -311,9 +311,10 @@ func TestSearch(t *testing.T) {
 		return mockResponse(200, `{
 			"results": [
 				{
-					"uuid": "test-uuid",
-					"title": "Test Memo",
-					"summary": "Test summary",
+					"memo_uuid": "test-uuid",
+					"chunk_uuid": "test-chunk-uuid",
+					"memo_title": "Test Memo",
+					"memo_summary": "Test summary",
 					"content_snippet": "Test snippet",
 					"distance": 0.5
 				}
@@ -333,8 +334,8 @@ func TestSearch(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Results[0].UUID != "test-uuid" {
-		t.Errorf("expected UUID test-uuid, got %s", resp.Results[0].UUID)
+	if resp.Results[0].MemoUUID != "test-uuid" {
+		t.Errorf("expected MemoUUID test-uuid, got %s", resp.Results[0].MemoUUID)
 	}
 }
 
