@@ -35,8 +35,8 @@ func main() {
 
 	fmt.Printf("Found %d results\n", len(searchResp.Results))
 	for i, result := range searchResp.Results {
-		fmt.Printf("%d. %s (distance: %.4f)\n", i+1, result.Title, *result.Distance)
-		fmt.Printf("   Summary: %s\n", result.Summary)
+		fmt.Printf("%d. %s (distance: %.4f)\n", i+1, result.MemoTitle, *result.Distance)
+		fmt.Printf("   Summary: %s\n", result.MemoSummary)
 		fmt.Printf("   Snippet: %s\n\n", result.ContentSnippet)
 	}
 
@@ -53,7 +53,7 @@ func main() {
 
 	fmt.Printf("Found %d results\n", len(titleSearchResp.Results))
 	for i, result := range titleSearchResp.Results {
-		fmt.Printf("%d. %s\n", i+1, result.Title)
+		fmt.Printf("%d. %s\n", i+1, result.MemoTitle)
 	}
 	fmt.Println()
 
@@ -90,6 +90,6 @@ func main() {
 
 	fmt.Printf("Found %d results with filters\n", len(filteredSearchResp.Results))
 	for i, result := range filteredSearchResp.Results {
-		fmt.Printf("%d. %s (distance: %.4f)\n", i+1, result.Title, *result.Distance)
+		fmt.Printf("%d. %s (distance: %.4f)\n", i+1, result.MemoTitle, *result.Distance)
 	}
 }
