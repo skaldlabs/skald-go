@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Check Memo Status Example
 //
 // This example demonstrates how to check the processing status of a memo,

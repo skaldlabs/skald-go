@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Upload File and Wait for Processing Example
 //
 // This example demonstrates a complete workflow:

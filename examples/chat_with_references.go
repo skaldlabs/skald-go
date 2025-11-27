@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Chat with References Example
 //
 // This example demonstrates how to use the references feature in the Skald SDK.

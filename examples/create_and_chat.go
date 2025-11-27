@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Create Memo, Wait, and Chat Example
 //
 // This example demonstrates a complete workflow:
