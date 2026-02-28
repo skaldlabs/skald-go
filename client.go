@@ -14,6 +14,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Client is the main Skald SDK client
@@ -21,6 +26,7 @@ type Client struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
+	tracer     trace.Tracer
 }
 
 // NewClient creates a new Skald client
@@ -37,8 +43,55 @@ func NewClient(apiKey string, baseURL ...string) *Client {
 	}
 }
 
+// NewClientWithOptions creates a new Skald client with functional options.
+// Use this constructor to enable OpenTelemetry tracing or provide a custom HTTP client.
+func NewClientWithOptions(apiKey string, baseURL string, opts ...Option) *Client {
+	if baseURL == "" {
+		baseURL = "https://api.useskald.com"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	cfg := &clientConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	httpClient := cfg.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{}
+	}
+
+	var tracer trace.Tracer
+	if cfg.tracerProvider != nil {
+		tracer = cfg.tracerProvider.Tracer("github.com/skaldlabs/skald-go")
+		transport := httpClient.Transport
+		if transport == nil {
+			transport = http.DefaultTransport
+		}
+		httpClient.Transport = otelhttp.NewTransport(transport, otelhttp.WithTracerProvider(cfg.tracerProvider))
+	}
+
+	return &Client{
+		apiKey:     apiKey,
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		tracer:     tracer,
+	}
+}
+
+// startSpan starts a new span if tracing is enabled, otherwise returns a no-op span.
+func (c *Client) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	if c.tracer == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+	return c.tracer.Start(ctx, name)
+}
+
 // CreateMemo creates a new memo
 func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemoResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.CreateMemo")
+	defer span.End()
+
 	// Initialize metadata to empty map if not provided
 	if memoData.Metadata == nil {
 		memoData.Metadata = make(map[string]interface{})
@@ -51,11 +104,15 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/memo", nil, bytes.NewReader(body))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -64,6 +121,7 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	span.SetAttributes(attribute.String("skald.memo_uuid", result.MemoUUID.String()))
 	return &result, nil
 }
 
@@ -71,9 +129,16 @@ func (c *Client) CreateMemo(ctx context.Context, memoData MemoData) (*CreateMemo
 // Supported file formats: PDF, DOC, DOCX, PPTX
 // Maximum file size: 100MB
 func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoData *MemoFileData) (*CreateMemoResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.CreateMemoFromFile")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("skald.file_name", filepath.Base(filePath)))
+
 	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
@@ -174,11 +239,15 @@ func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoDa
 	// Execute request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -187,11 +256,15 @@ func (c *Client) CreateMemoFromFile(ctx context.Context, filePath string, memoDa
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	span.SetAttributes(attribute.String("skald.memo_uuid", result.MemoUUID.String()))
 	return &result, nil
 }
 
 // GetMemo retrieves a memo by ID
 func (c *Client) GetMemo(ctx context.Context, memoID string, idType ...IDType) (*Memo, error) {
+	ctx, span := c.startSpan(ctx, "skald.GetMemo")
+	defer span.End()
+
 	idTypeValue := IDTypeMemoUUID
 	if len(idType) > 0 {
 		idTypeValue = idType[0]
@@ -199,6 +272,11 @@ func (c *Client) GetMemo(ctx context.Context, memoID string, idType ...IDType) (
 			return nil, fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
 		}
 	}
+
+	span.SetAttributes(
+		attribute.String("skald.memo_id", memoID),
+		attribute.String("skald.id_type", string(idTypeValue)),
+	)
 
 	params := url.Values{}
 	if idTypeValue != IDTypeMemoUUID {
@@ -208,11 +286,15 @@ func (c *Client) GetMemo(ctx context.Context, memoID string, idType ...IDType) (
 	path := fmt.Sprintf("/api/v1/memo/%s", url.PathEscape(memoID))
 	resp, err := c.doRequest(ctx, "GET", path, params, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -226,23 +308,32 @@ func (c *Client) GetMemo(ctx context.Context, memoID string, idType ...IDType) (
 
 // ListMemos retrieves a paginated list of memos
 func (c *Client) ListMemos(ctx context.Context, params *ListMemosParams) (*ListMemosResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.ListMemos")
+	defer span.End()
+
 	queryParams := url.Values{}
 	if params != nil {
 		if params.Page != nil {
+			span.SetAttributes(attribute.Int("skald.page", *params.Page))
 			queryParams.Set("page", fmt.Sprintf("%d", *params.Page))
 		}
 		if params.PageSize != nil {
+			span.SetAttributes(attribute.Int("skald.page_size", *params.PageSize))
 			queryParams.Set("page_size", fmt.Sprintf("%d", *params.PageSize))
 		}
 	}
 
 	resp, err := c.doRequest(ctx, "GET", "/api/v1/memo", queryParams, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -256,6 +347,9 @@ func (c *Client) ListMemos(ctx context.Context, params *ListMemosParams) (*ListM
 
 // UpdateMemo updates an existing memo
 func (c *Client) UpdateMemo(ctx context.Context, memoID string, updateData UpdateMemoData, idType ...IDType) (*UpdateMemoResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.UpdateMemo")
+	defer span.End()
+
 	idTypeValue := IDTypeMemoUUID
 	if len(idType) > 0 {
 		idTypeValue = idType[0]
@@ -263,6 +357,11 @@ func (c *Client) UpdateMemo(ctx context.Context, memoID string, updateData Updat
 			return nil, fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
 		}
 	}
+
+	span.SetAttributes(
+		attribute.String("skald.memo_id", memoID),
+		attribute.String("skald.id_type", string(idTypeValue)),
+	)
 
 	params := url.Values{}
 	if idTypeValue != IDTypeMemoUUID {
@@ -277,11 +376,15 @@ func (c *Client) UpdateMemo(ctx context.Context, memoID string, updateData Updat
 	path := fmt.Sprintf("/api/v1/memo/%s", url.PathEscape(memoID))
 	resp, err := c.doRequest(ctx, "PATCH", path, params, bytes.NewReader(body))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -295,6 +398,9 @@ func (c *Client) UpdateMemo(ctx context.Context, memoID string, updateData Updat
 
 // DeleteMemo deletes a memo
 func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType) error {
+	ctx, span := c.startSpan(ctx, "skald.DeleteMemo")
+	defer span.End()
+
 	idTypeValue := IDTypeMemoUUID
 	if len(idType) > 0 {
 		idTypeValue = idType[0]
@@ -302,6 +408,11 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 			return fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
 		}
 	}
+
+	span.SetAttributes(
+		attribute.String("skald.memo_id", memoID),
+		attribute.String("skald.id_type", string(idTypeValue)),
+	)
 
 	params := url.Values{}
 	if idTypeValue != IDTypeMemoUUID {
@@ -311,11 +422,15 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 	path := fmt.Sprintf("/api/v1/memo/%s", url.PathEscape(memoID))
 	resp, err := c.doRequest(ctx, "DELETE", path, params, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -325,6 +440,9 @@ func (c *Client) DeleteMemo(ctx context.Context, memoID string, idType ...IDType
 // CheckMemoStatus checks the processing status of a memo
 // The memo can be identified by UUID (default) or reference ID
 func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...IDType) (*MemoStatusResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.CheckMemoStatus")
+	defer span.End()
+
 	idTypeValue := IDTypeMemoUUID
 	if len(idType) > 0 {
 		idTypeValue = idType[0]
@@ -332,6 +450,11 @@ func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...I
 			return nil, fmt.Errorf("invalid idType: must be 'memo_uuid' or 'reference_id'")
 		}
 	}
+
+	span.SetAttributes(
+		attribute.String("skald.memo_id", memoID),
+		attribute.String("skald.id_type", string(idTypeValue)),
+	)
 
 	params := url.Values{}
 	if idTypeValue != IDTypeMemoUUID {
@@ -341,11 +464,15 @@ func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...I
 	path := fmt.Sprintf("/api/v1/memo/%s/status", url.PathEscape(memoID))
 	resp, err := c.doRequest(ctx, "GET", path, params, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -354,6 +481,7 @@ func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...I
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	span.SetAttributes(attribute.String("skald.status", string(status.Status)))
 	return &status, nil
 }
 
@@ -361,12 +489,27 @@ func (c *Client) CheckMemoStatus(ctx context.Context, memoID string, idType ...I
 // It returns when the memo is processed, or an error if processing fails or context is cancelled.
 // The pollInterval specifies how long to wait between status checks.
 func (c *Client) WaitForMemoReady(ctx context.Context, memoID string, pollInterval time.Duration, idType ...IDType) error {
+	ctx, span := c.startSpan(ctx, "skald.WaitForMemoReady")
+	defer span.End()
+
+	idTypeValue := IDTypeMemoUUID
+	if len(idType) > 0 {
+		idTypeValue = idType[0]
+	}
+
+	span.SetAttributes(
+		attribute.String("skald.memo_id", memoID),
+		attribute.String("skald.id_type", string(idTypeValue)),
+	)
+
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	for {
 		status, err := c.CheckMemoStatus(ctx, memoID, idType...)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
@@ -378,7 +521,10 @@ func (c *Client) WaitForMemoReady(ctx context.Context, memoID string, pollInterv
 			if status.ErrorReason != nil {
 				errMsg = *status.ErrorReason
 			}
-			return fmt.Errorf("%s", errMsg)
+			waitErr := fmt.Errorf("%s", errMsg)
+			span.RecordError(waitErr)
+			span.SetStatus(codes.Error, waitErr.Error())
+			return waitErr
 		case MemoStatusProcessing:
 			// Continue polling
 		}
@@ -394,6 +540,11 @@ func (c *Client) WaitForMemoReady(ctx context.Context, memoID string, pollInterv
 
 // Search searches for memos
 func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.Search")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("skald.query_length", len(searchReq.Query)))
+
 	body, err := json.Marshal(searchReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal search request: %w", err)
@@ -401,11 +552,15 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/search", nil, bytes.NewReader(body))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -414,11 +569,21 @@ func (c *Client) Search(ctx context.Context, searchReq SearchRequest) (*SearchRe
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	span.SetAttributes(attribute.Int("skald.result_count", len(result.Results)))
 	return &result, nil
 }
 
 // Chat performs a non-streaming chat query and returns the response
 func (c *Client) Chat(ctx context.Context, params ChatParams) (*ChatResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.Chat")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("skald.query_length", len(params.Query)),
+		attribute.String("skald.chat_id", params.ChatID),
+		attribute.Bool("skald.has_rag_config", params.RAGConfig != nil),
+	)
+
 	chatReq := chatRequest{
 		Query:        params.Query,
 		Stream:       false,
@@ -435,11 +600,15 @@ func (c *Client) Chat(ctx context.Context, params ChatParams) (*ChatResponse, er
 
 	resp, err := c.doRequest(ctx, "POST", "/api/v1/chat", nil, bytes.NewReader(body))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -456,7 +625,16 @@ func (c *Client) StreamedChat(ctx context.Context, params ChatParams) (<-chan Ch
 	eventChan := make(chan ChatStreamEvent)
 	errChan := make(chan error, 1)
 
+	ctx, span := c.startSpan(ctx, "skald.StreamedChat")
+
+	span.SetAttributes(
+		attribute.Int("skald.query_length", len(params.Query)),
+		attribute.String("skald.chat_id", params.ChatID),
+		attribute.Bool("skald.has_rag_config", params.RAGConfig != nil),
+	)
+
 	go func() {
+		defer span.End()
 		defer close(eventChan)
 		defer close(errChan)
 
@@ -471,29 +649,67 @@ func (c *Client) StreamedChat(ctx context.Context, params ChatParams) (<-chan Ch
 
 		body, err := json.Marshal(chatReq)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			errChan <- fmt.Errorf("failed to marshal chat request: %w", err)
 			return
 		}
 
 		resp, err := c.doRequest(ctx, "POST", "/api/v1/chat", nil, bytes.NewReader(body))
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			errChan <- err
 			return
 		}
 		defer func() { _ = resp.Body.Close() }()
 
 		if err := c.checkResponse(resp); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			errChan <- err
 			return
 		}
 
 		if err := c.parseSSEStream(resp.Body, eventChan); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			errChan <- err
 			return
 		}
 	}()
 
 	return eventChan, errChan
+}
+
+// GetChat retrieves a persisted chat conversation by its ID
+func (c *Client) GetChat(ctx context.Context, chatID string) (*GetChatResponse, error) {
+	ctx, span := c.startSpan(ctx, "skald.GetChat")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("skald.chat_id", chatID))
+
+	path := fmt.Sprintf("/api/v1/chat/%s", url.PathEscape(chatID))
+	resp, err := c.doRequest(ctx, "GET", path, nil, nil)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := c.checkResponse(resp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	var result GetChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // doRequest performs an HTTP request
