@@ -302,7 +302,7 @@ if err != nil {
 
 fmt.Printf("Found %d results\n", len(filtered.Results))
 for _, memo := range filtered.Results {
-    fmt.Printf("- %s (distance: %.4f)\n", memo.Title, *memo.Distance)
+    fmt.Printf("- %s (distance: %.4f)\n", memo.MemoTitle, *memo.Distance)
 }
 ```
 #### Search Parameters
@@ -319,17 +319,19 @@ type SearchResponse struct {
 }
 
 type SearchResult struct {
-    UUID           string
-    Title          string
-    Summary        string
+    MemoUUID       string
+    ChunkUUID      string
+    MemoTitle      string
+    MemoSummary    string
     ContentSnippet string
     Distance       *float64  // Only populated for semantic search
 }
 ```
 
-- `UUID` - Unique identifier for the memo
-- `Title` - Memo title
-- `Summary` - Auto-generated summary for the memo
+- `MemoUUID` - Unique identifier for the memo
+- `ChunkUUID` - Unique identifier for the matched chunk
+- `MemoTitle` - Memo title
+- `MemoSummary` - Auto-generated summary for the memo
 - `ContentSnippet` - A snippet containing the beginning of the memo
 - `Distance` - A decimal from 0 to 2 determining how close the result was deemed to be to the query.
 
@@ -402,6 +404,28 @@ Streaming responses yield events:
 - `{ Type: "token", Content: *string }` - Each text token as it's generated
 - `{ Type: "done" }` - Indicates the stream has finished
 
+#### Retrieve a Chat
+
+Retrieve a persisted chat conversation by its ID:
+
+```go
+chat, err := client.GetChat(ctx, "chat-uuid-here")
+if err != nil {
+    // Check if the chat was not found
+    if apiErr, ok := err.(*skald.APIError); ok && apiErr.IsNotFound() {
+        fmt.Println("Chat not found")
+        return
+    }
+    log.Fatal(err)
+}
+
+fmt.Printf("Chat ID: %s\n", chat.ChatID)
+fmt.Printf("Messages: %d\n", len(chat.Messages))
+
+for _, msg := range chat.Messages {
+    fmt.Printf("[%s] %s\n", msg.Role, msg.Content)
+}
+```
 
 ### Filters
 
@@ -558,6 +582,39 @@ doc, err := client.GenerateDoc(ctx, "Create an API integration guide", &rules, [
 })
 ```
 
+### Tracing (OpenTelemetry)
+
+The SDK supports optional OpenTelemetry tracing. When enabled, it automatically creates spans for every SDK operation and propagates trace context through HTTP requests.
+
+#### Using the global TracerProvider
+
+```go
+client := skald.NewClientWithOptions("your-api-key", "https://api.useskald.com",
+    skald.WithTracing(),
+)
+```
+
+#### Using a custom TracerProvider
+
+```go
+client := skald.NewClientWithOptions("your-api-key", "https://api.useskald.com",
+    skald.WithTracerProvider(myProvider),
+)
+```
+
+#### With a custom HTTP client
+
+```go
+client := skald.NewClientWithOptions("your-api-key", "https://api.useskald.com",
+    skald.WithTracing(),
+    skald.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+)
+```
+
+When tracing is enabled, each public method (e.g., `CreateMemo`, `Chat`, `Search`) creates a span with relevant attributes such as `skald.memo_uuid`, `skald.query_length`, and `skald.chat_id`. HTTP-level spans are also created automatically via `otelhttp`.
+
+When tracing is **not** enabled (the default), there is zero overhead.
+
 ### Error Handling
 
 ```go
@@ -626,7 +683,7 @@ func main() {
 
     fmt.Printf("Found %d results:\n", len(searchResults.Results))
     for _, result := range searchResults.Results {
-        fmt.Printf("- %s\n", result.Title)
+        fmt.Printf("- %s\n", result.MemoTitle)
     }
 
     // Chat with knowledge base
@@ -675,9 +732,20 @@ type SearchResponse struct { ... }
 type SearchResult struct { ... }
 
 // Chat types
-type ChatRequest struct { ... }
+type ChatParams struct { ... }
 type ChatResponse struct { ... }
 type ChatStreamEvent struct { ... }
+type GetChatResponse struct { ... }
+type ChatMessage struct { ... }
+
+// RAG configuration types
+type RAGConfig struct { ... }
+type LLMProvider string
+type References map[string]MemoReference
+type MemoReference struct { ... }
+
+// Error types
+type APIError struct { ... }
 ```
 
 See the [types.go](types.go) file for complete type definitions.

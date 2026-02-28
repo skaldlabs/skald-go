@@ -8,6 +8,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // mockRoundTripper is a mock HTTP transport for testing
@@ -831,5 +837,508 @@ func TestCheckMemoStatusInvalidIDType(t *testing.T) {
 	_, err := client.CheckMemoStatus(context.Background(), "test-id", IDType("invalid"))
 	if err == nil {
 		t.Error("expected error for invalid idType")
+	}
+}
+
+func TestAPIErrorMethods(t *testing.T) {
+	tests := []struct {
+		name           string
+		statusCode     int
+		isNotFound     bool
+		isUnauthorized bool
+		isBadRequest   bool
+	}{
+		{
+			name:           "404 Not Found",
+			statusCode:     404,
+			isNotFound:     true,
+			isUnauthorized: false,
+			isBadRequest:   false,
+		},
+		{
+			name:           "401 Unauthorized",
+			statusCode:     401,
+			isNotFound:     false,
+			isUnauthorized: true,
+			isBadRequest:   false,
+		},
+		{
+			name:           "400 Bad Request",
+			statusCode:     400,
+			isNotFound:     false,
+			isUnauthorized: false,
+			isBadRequest:   true,
+		},
+		{
+			name:           "500 Internal Server Error",
+			statusCode:     500,
+			isNotFound:     false,
+			isUnauthorized: false,
+			isBadRequest:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apiErr := &APIError{
+				StatusCode: tt.statusCode,
+				Message:    "test error",
+			}
+
+			if apiErr.IsNotFound() != tt.isNotFound {
+				t.Errorf("IsNotFound(): expected %v, got %v", tt.isNotFound, apiErr.IsNotFound())
+			}
+			if apiErr.IsUnauthorized() != tt.isUnauthorized {
+				t.Errorf("IsUnauthorized(): expected %v, got %v", tt.isUnauthorized, apiErr.IsUnauthorized())
+			}
+			if apiErr.IsBadRequest() != tt.isBadRequest {
+				t.Errorf("IsBadRequest(): expected %v, got %v", tt.isBadRequest, apiErr.IsBadRequest())
+			}
+		})
+	}
+}
+
+func TestAPIErrorFromCheckResponse(t *testing.T) {
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		return mockResponse(404, `{"detail": "Not found"}`), nil
+	})
+
+	_, err := client.GetMemo(context.Background(), "nonexistent-uuid")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+
+	if !apiErr.IsNotFound() {
+		t.Error("expected IsNotFound() to be true")
+	}
+}
+
+func TestGetChat(t *testing.T) {
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		if req.Method != "GET" {
+			t.Errorf("expected GET request, got %s", req.Method)
+		}
+		if req.URL.Path != "/api/v1/chat/test-chat-id" {
+			t.Errorf("expected path /api/v1/chat/test-chat-id, got %s", req.URL.Path)
+		}
+		if req.Header.Get("Authorization") != "Bearer test-api-key" {
+			t.Errorf("expected Authorization header with Bearer token")
+		}
+		return mockResponse(200, `{
+			"chat_id": "test-chat-id",
+			"messages": [
+				{
+					"role": "user",
+					"content": "What is Go?",
+					"created_at": "2024-01-01T00:00:00Z"
+				},
+				{
+					"role": "assistant",
+					"content": "Go is a programming language.",
+					"created_at": "2024-01-01T00:01:00Z"
+				}
+			]
+		}`), nil
+	})
+
+	resp, err := client.GetChat(context.Background(), "test-chat-id")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.ChatID != "test-chat-id" {
+		t.Errorf("expected ChatID 'test-chat-id', got %s", resp.ChatID)
+	}
+	if len(resp.Messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(resp.Messages))
+	}
+	if resp.Messages[0].Role != "user" {
+		t.Errorf("expected first message role 'user', got %s", resp.Messages[0].Role)
+	}
+	if resp.Messages[0].Content != "What is Go?" {
+		t.Errorf("expected first message content 'What is Go?', got %s", resp.Messages[0].Content)
+	}
+	if resp.Messages[1].Role != "assistant" {
+		t.Errorf("expected second message role 'assistant', got %s", resp.Messages[1].Role)
+	}
+}
+
+func TestGetChatNotFound(t *testing.T) {
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		return mockResponse(404, `{"detail": "Chat not found"}`), nil
+	})
+
+	_, err := client.GetChat(context.Background(), "nonexistent-chat-id")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+
+	if !apiErr.IsNotFound() {
+		t.Error("expected IsNotFound() to be true")
+	}
+	if apiErr.StatusCode != 404 {
+		t.Errorf("expected status code 404, got %d", apiErr.StatusCode)
+	}
+}
+
+// --- OpenTelemetry Tests ---
+
+// newTestTracerProvider creates an in-memory TracerProvider for testing.
+func newTestTracerProvider() (*sdktrace.TracerProvider, *tracetest.InMemoryExporter) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	return tp, exporter
+}
+
+// newTracedMockClient creates a traced client with a mock transport.
+func newTracedMockClient(tp trace.TracerProvider, roundTripFunc func(req *http.Request) (*http.Response, error)) *Client {
+	client := NewClientWithOptions("test-api-key", "https://mock.api", WithTracerProvider(tp))
+	// Replace the otelhttp-wrapped transport's base with our mock.
+	// Since otelhttp wraps the transport, we need to set the whole transport to our mock
+	// and rely on the fact that otelhttp was configured at construction time.
+	// Instead, we create the client, then replace its HTTP client transport directly.
+	client.httpClient.Transport = &mockRoundTripper{roundTripFunc: roundTripFunc}
+	return client
+}
+
+func TestNewClientWithOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		apiKey      string
+		baseURL     string
+		opts        []Option
+		expectedURL string
+		hasTracer   bool
+	}{
+		{
+			name:        "no options",
+			apiKey:      "test-key",
+			baseURL:     "https://custom.api.com",
+			opts:        nil,
+			expectedURL: "https://custom.api.com",
+			hasTracer:   false,
+		},
+		{
+			name:        "empty base URL uses default",
+			apiKey:      "test-key",
+			baseURL:     "",
+			opts:        nil,
+			expectedURL: "https://api.useskald.com",
+			hasTracer:   false,
+		},
+		{
+			name:        "base URL with trailing slash",
+			apiKey:      "test-key",
+			baseURL:     "https://custom.api.com/",
+			opts:        nil,
+			expectedURL: "https://custom.api.com",
+			hasTracer:   false,
+		},
+		{
+			name:    "with tracer provider",
+			apiKey:  "test-key",
+			baseURL: "https://custom.api.com",
+			opts: func() []Option {
+				tp, _ := newTestTracerProvider()
+				return []Option{WithTracerProvider(tp)}
+			}(),
+			expectedURL: "https://custom.api.com",
+			hasTracer:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewClientWithOptions(tt.apiKey, tt.baseURL, tt.opts...)
+			if client.baseURL != tt.expectedURL {
+				t.Errorf("expected baseURL %q, got %q", tt.expectedURL, client.baseURL)
+			}
+			if client.apiKey != tt.apiKey {
+				t.Errorf("expected apiKey %q, got %q", tt.apiKey, client.apiKey)
+			}
+			if tt.hasTracer && client.tracer == nil {
+				t.Error("expected tracer to be set")
+			}
+			if !tt.hasTracer && client.tracer != nil {
+				t.Error("expected tracer to be nil")
+			}
+		})
+	}
+}
+
+func TestWithTracingWrapsTransport(t *testing.T) {
+	client := NewClientWithOptions("test-key", "https://api.example.com", WithTracing())
+
+	// When tracing is enabled, the transport should be wrapped (not the default)
+	if client.tracer == nil {
+		t.Error("expected tracer to be set when using WithTracing()")
+	}
+	if client.httpClient.Transport == nil {
+		t.Error("expected transport to be set when tracing is enabled")
+	}
+}
+
+func TestWithTracerProvider(t *testing.T) {
+	tp, _ := newTestTracerProvider()
+	client := NewClientWithOptions("test-key", "https://api.example.com", WithTracerProvider(tp))
+
+	if client.tracer == nil {
+		t.Fatal("expected tracer to be set")
+	}
+}
+
+func TestWithHTTPClient(t *testing.T) {
+	customClient := &http.Client{Timeout: 30 * time.Second}
+	client := NewClientWithOptions("test-key", "https://api.example.com", WithHTTPClient(customClient))
+
+	if client.httpClient.Timeout != 30*time.Second {
+		t.Errorf("expected timeout 30s, got %v", client.httpClient.Timeout)
+	}
+}
+
+func TestSpanCreation(t *testing.T) {
+	tp, exporter := newTestTracerProvider()
+
+	client := newTracedMockClient(tp, func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{"memo_uuid": "123e4567-e89b-12d3-a456-426614174000"}`), nil
+	})
+
+	_, err := client.CreateMemo(context.Background(), MemoData{
+		Title:   "Test Memo",
+		Content: "Test content",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Force flush
+	if err := tp.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+
+	spans := exporter.GetSpans()
+
+	// Find the skald.CreateMemo span
+	var found bool
+	for _, span := range spans {
+		if span.Name == "skald.CreateMemo" {
+			found = true
+
+			// Check for memo_uuid attribute
+			var hasMemoUUID bool
+			for _, attr := range span.Attributes {
+				if attr.Key == "skald.memo_uuid" && attr.Value.AsString() == "123e4567-e89b-12d3-a456-426614174000" {
+					hasMemoUUID = true
+				}
+			}
+			if !hasMemoUUID {
+				t.Error("expected skald.memo_uuid attribute on span")
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected span named 'skald.CreateMemo'")
+	}
+}
+
+func TestSpanErrorRecording(t *testing.T) {
+	tp, exporter := newTestTracerProvider()
+
+	client := newTracedMockClient(tp, func(req *http.Request) (*http.Response, error) {
+		return mockResponse(500, `{"error": "internal server error"}`), nil
+	})
+
+	_, err := client.CreateMemo(context.Background(), MemoData{
+		Title:   "Test Memo",
+		Content: "Test content",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if fErr := tp.ForceFlush(context.Background()); fErr != nil {
+		t.Fatalf("failed to flush: %v", fErr)
+	}
+
+	spans := exporter.GetSpans()
+
+	var found bool
+	for _, span := range spans {
+		if span.Name == "skald.CreateMemo" {
+			found = true
+
+			// Verify span status is error
+			if span.Status.Code != codes.Error {
+				t.Errorf("expected span status Error, got %v", span.Status.Code)
+			}
+
+			// Verify span has recorded error events
+			var hasErrorEvent bool
+			for _, event := range span.Events {
+				if event.Name == "exception" {
+					hasErrorEvent = true
+					break
+				}
+			}
+			if !hasErrorEvent {
+				t.Error("expected error event on span")
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected span named 'skald.CreateMemo'")
+	}
+}
+
+func TestSpanAttributesOnSearch(t *testing.T) {
+	tp, exporter := newTestTracerProvider()
+
+	client := newTracedMockClient(tp, func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{
+			"results": [
+				{"memo_uuid": "uuid1", "chunk_uuid": "chunk1", "memo_title": "Test", "memo_summary": "Summary", "content_snippet": "Snippet", "distance": 0.5}
+			]
+		}`), nil
+	})
+
+	_, err := client.Search(context.Background(), SearchRequest{
+		Query: "test query",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if fErr := tp.ForceFlush(context.Background()); fErr != nil {
+		t.Fatalf("failed to flush: %v", fErr)
+	}
+
+	spans := exporter.GetSpans()
+
+	var found bool
+	for _, span := range spans {
+		if span.Name == "skald.Search" {
+			found = true
+
+			attrMap := make(map[attribute.Key]attribute.Value)
+			for _, attr := range span.Attributes {
+				attrMap[attr.Key] = attr.Value
+			}
+
+			if v, ok := attrMap["skald.query_length"]; !ok || v.AsInt64() != 10 {
+				t.Errorf("expected skald.query_length=10, got %v", v)
+			}
+			if v, ok := attrMap["skald.result_count"]; !ok || v.AsInt64() != 1 {
+				t.Errorf("expected skald.result_count=1, got %v", v)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected span named 'skald.Search'")
+	}
+}
+
+func TestSpanAttributesOnChat(t *testing.T) {
+	tp, exporter := newTestTracerProvider()
+
+	client := newTracedMockClient(tp, func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{"ok": true, "response": "answer", "intermediate_steps": []}`), nil
+	})
+
+	_, err := client.Chat(context.Background(), ChatParams{
+		Query:  "test query",
+		ChatID: "chat-123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if fErr := tp.ForceFlush(context.Background()); fErr != nil {
+		t.Fatalf("failed to flush: %v", fErr)
+	}
+
+	spans := exporter.GetSpans()
+
+	var found bool
+	for _, span := range spans {
+		if span.Name == "skald.Chat" {
+			found = true
+
+			attrMap := make(map[attribute.Key]attribute.Value)
+			for _, attr := range span.Attributes {
+				attrMap[attr.Key] = attr.Value
+			}
+
+			if v, ok := attrMap["skald.query_length"]; !ok || v.AsInt64() != 10 {
+				t.Errorf("expected skald.query_length=10, got %v", v)
+			}
+			if v, ok := attrMap["skald.chat_id"]; !ok || v.AsString() != "chat-123" {
+				t.Errorf("expected skald.chat_id=chat-123, got %v", v)
+			}
+			if v, ok := attrMap["skald.has_rag_config"]; !ok || v.AsBool() != false {
+				t.Errorf("expected skald.has_rag_config=false, got %v", v)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected span named 'skald.Chat'")
+	}
+}
+
+func TestSpanAttributesOnGetChat(t *testing.T) {
+	tp, exporter := newTestTracerProvider()
+
+	client := newTracedMockClient(tp, func(req *http.Request) (*http.Response, error) {
+		return mockResponse(200, `{"chat_id": "chat-456", "messages": []}`), nil
+	})
+
+	_, err := client.GetChat(context.Background(), "chat-456")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if fErr := tp.ForceFlush(context.Background()); fErr != nil {
+		t.Fatalf("failed to flush: %v", fErr)
+	}
+
+	spans := exporter.GetSpans()
+
+	var found bool
+	for _, span := range spans {
+		if span.Name == "skald.GetChat" {
+			found = true
+
+			var hasChatID bool
+			for _, attr := range span.Attributes {
+				if attr.Key == "skald.chat_id" && attr.Value.AsString() == "chat-456" {
+					hasChatID = true
+				}
+			}
+			if !hasChatID {
+				t.Error("expected skald.chat_id attribute")
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("expected span named 'skald.GetChat'")
 	}
 }

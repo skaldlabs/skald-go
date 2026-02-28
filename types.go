@@ -310,3 +310,16 @@ func (e *APIError) IsUnauthorized() bool {
 func (e *APIError) IsBadRequest() bool {
 	return e.StatusCode == 400
 }
+
+// ChatMessage represents a message in a chat conversation
+type ChatMessage struct {
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetChatResponse is the response from retrieving a chat
+type GetChatResponse struct {
+	ChatID   string        `json:"chat_id"`
+	Messages []ChatMessage `json:"messages"`
+}
