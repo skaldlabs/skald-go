@@ -80,11 +80,11 @@ func NewClientWithOptions(apiKey string, baseURL string, opts ...Option) *Client
 }
 
 // startSpan starts a new span if tracing is enabled, otherwise returns a no-op span.
-func (c *Client) startSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+func (c *Client) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	if c.tracer == nil {
 		return ctx, trace.SpanFromContext(ctx)
 	}
-	return c.tracer.Start(ctx, name, opts...)
+	return c.tracer.Start(ctx, name)
 }
 
 // CreateMemo creates a new memo
